@@ -1,0 +1,147 @@
+#!/usr/bin/env perl
+
+use Mojolicious::Lite;
+use Mojo::Util qw(dumper);
+
+app->helper(
+    set_state => sub {
+        my ( $c, $status, $freq ) = @_;
+
+        # TODO:  Lookup freq info
+        # TODO:  Save interesting bits in a DB
+        my $info = 'Static for now';
+
+        my %detail = ( squelch => $status, freq => $freq, info => $info );
+        app->defaults( state => \%detail );
+    }
+);
+
+my $rtlfm_pid;    # need to get rid of this global
+app->helper(
+    start_rtlfm => sub {
+        my $c = shift;
+
+        # errors to handle:
+        # dongle yanked:
+        #    rtlsdr_demod_write_reg failed with -1
+        #    rtlsdr_demod_read_reg failed with -4
+        #    cb transfer status: 5, canceling
+
+        # TODO:  get frequencies from DB
+        my $cmd =
+
+#'/usr/local/bin/rtl_fm -M fm -p 34 -f 462.5625M -f 467.6375M -s 16k -l 80 -g 49.2 -E wav | aplay';
+'/usr/local/bin/rtl_fm -M fm -p 34 -f 462.5625M -f 467.6375M -s 16k -l 80 -g 49.2 -E wav /tmp/rtlfm_audio.wav';
+
+        if ( defined $rtlfm_pid ) {
+            app->log->info(
+                sprintf( 'About to kill rtl_fm (pid%s)', $rtlfm_pid ) );
+            kill $rtlfm_pid;
+            undef $rtlfm_pid;
+        }
+
+        my $rtlfm_fifo;
+        my $rtlfm_pid = open( $rtlfm_fifo, "$cmd 2>&1 |" ) or do {
+
+     # this will not be hit if rtl_fm command is executed and there is no dongle
+            app->log->error(
+                "Couldn't open the thing required for dongle interaction: $!");
+            return;
+        };
+
+        my $stream_in = Mojo::IOLoop::Stream->new($rtlfm_fifo);
+
+        $stream_in = $stream_in->timeout(0);
+        $stream_in->on(
+            read => sub {
+                my ( $stream_in, $bytes ) = @_;
+                chomp($bytes);
+                if ( $bytes =~ /(OPEN|CLOSED)\|(\d+)/ ) {
+                    my $status   = $1;
+                    my $cur_freq = $2;
+                    app->set_state( $status, $cur_freq );
+                    app->log->info(
+                        sprintf( 'status: %s freq: %s', $status, $cur_freq ) );
+                }
+                elsif ( $bytes =~ /No supported devices found/ ) {
+                    app->log->error('No dongle connected!');
+
+                    # retry in a few seconds
+                    $c->delay(
+                        sub { Mojo::IOLoop->timer( 4 => shift->begin ) },
+                        sub { $c->start_rtlfm },
+                    );
+                    return;
+                }
+                else {
+                    app->log->info(
+                        sprintf( 'not sure what this is: %s', $bytes ) );
+                }
+            }
+        );
+        $stream_in->on(
+            close => sub {
+                my $stream_in = shift;
+                app->log->info('stream_in closed');
+            }
+        );
+        $stream_in->on(
+            error => sub {
+                my ( $stream_in, $err ) = @_;
+                app->log->info('stream_in error');
+            }
+        );
+        my $sid = Mojo::IOLoop->stream($stream_in);
+        $stream_in->on( finish => sub { Mojo::IOLoop->remove($sid) } );
+
+    }
+);
+
+app->start_rtlfm;
+
+get '/' => { template => 'index' };
+
+websocket '/output' => sub {
+    my $c = shift;
+
+    $c->inactivity_timeout(15);
+
+    app->log->info( 'in websocket: ' . dumper( app->defaults('state') ) );
+
+    # need to stop the recurring loop when socket times out
+    my $prev_val = 'none yet';
+    my $id       = Mojo::IOLoop->recurring(
+        0.25 => sub {
+            my $loop     = shift;
+            my %details  = %{ app->defaults('state') };
+            my $cur_freq = $details{freq};
+
+            # I probably need to track prev squelch state as well
+            if ( $prev_val ne $cur_freq ) {
+                app->log->info("bytes for browser: |$cur_freq|\n");
+                $c->send( { text => $cur_freq . "\n" } );
+                $prev_val = $cur_freq;
+            }
+        }
+    );
+
+    $c->on(
+        finish => sub {
+            my ( $c, $code, $reason ) = @_;
+            Mojo::IOLoop->remove($id);
+            $c->app->log->debug("WebSocket closed with status $code.");
+        }
+    );
+};
+
+app->start;
+
+__DATA__
+
+@@ index.html.ep
+<pre id="log"></pre>
+<script>
+  var ws = new WebSocket('<%= url_for('output')->to_abs %>');
+  var log = document.getElementById('log');
+  ws.onmessage = function (event) { log.innerHTML += event.data };
+</script>
