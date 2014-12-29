@@ -9,6 +9,8 @@ app->helper(
 
         # TODO:  Lookup freq info
         # TODO:  Save interesting bits in a DB
+	# TODO: set the app->defaults with detail before scanner does so as user may load the index.html
+	# before it is populated.
         my $info = 'Static for now';
 
         my %detail = ( squelch => $status, freq => $freq, info => $info );
@@ -119,19 +121,27 @@ websocket '/output' => sub {
             # I probably need to track prev squelch state as well
             if ( $prev_val ne $cur_freq ) {
                 app->log->info("bytes for browser: |$cur_freq|\n");
-                $c->send( { text => $cur_freq . "\n" } );
+		$c = $c->send({json   => \%details});
+                #$c->send( { text => $cur_freq . "\n" } );
                 $prev_val = $cur_freq;
             }
         }
     );
 
     $c->on(
-        finish => sub {
-            my ( $c, $code, $reason ) = @_;
-            Mojo::IOLoop->remove($id);
-            $c->app->log->debug("WebSocket closed with status $code.");
-        }
+	json => sub {
+	    my ($ws, $hash) = @_;
+	    
+	    app->log->debug("Message: $hash->{msg}");
+	}
     );
+#    $c->on(
+#        finish => sub {
+#            my ( $c, $code, $reason ) = @_;
+#            Mojo::IOLoop->remove($id);
+#            $c->app->log->debug("WebSocket closed with status $code.");
+#        }
+#    );
 };
 
 app->start;
@@ -143,5 +153,8 @@ __DATA__
 <script>
   var ws = new WebSocket('<%= url_for('output')->to_abs %>');
   var log = document.getElementById('log');
-  ws.onmessage = function (event) { log.innerHTML += event.data };
+  ws.onmessage = function (event) { 
+      var obj = JSON && JSON.parse(event.data) || $.parseJSON(data);
+      log.innerHTML += obj.freq
+  };
 </script>
