@@ -149,7 +149,32 @@ app->start;
 __DATA__
 
 @@ index.html.ep
+<html>
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.js"></script>
+<link rel="stylesheet" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/themes/smoothness/jquery-ui.css"/>
+<script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/jquery-ui.js"></script>
+
 <pre id="log"></pre>
+<script type="text/javascript">
+
+$(function() {
+    var availableTags = [
+        "Item1",
+        "Item2",
+        "Now3",
+        "And4"
+    ];
+    $( "#tags" ).autocomplete({
+        source: availableTags
+    });
+});
+
+    $(document).ready(function() {
+       // do stuff when DOM is ready
+       alert('jquery loaded');
+    });
+
+</script>
 <script>
   var ws = new WebSocket('<%= url_for('output')->to_abs %>');
   var log = document.getElementById('log');
@@ -158,3 +183,9 @@ __DATA__
       log.innerHTML += obj.freq
   };
 </script>
+
+<div class="ui-widget">
+    <input id="tags">
+</div>
+
+</html>
