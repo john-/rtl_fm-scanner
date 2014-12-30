@@ -2,100 +2,127 @@
 
 use Mojolicious::Lite;
 use Mojo::Util qw(dumper);
+use DBIx::Connector;
 
-app->helper(
-    set_state => sub {
-        my ( $c, $status, $freq ) = @_;
+app->secrets( ['Specfying a secret to make the reminder go away.'] );
 
-# TODO:  Lookup freq info
-# TODO:  Save interesting bits in a DB
-        my $info = 'Static for now';
+my $dbname = '../data/freqs.db';
 
-        my %detail = ( squelch => $status, freq => $freq, info => $info );
-        app->defaults( state => \%detail );
+helper connector => sub {
+    state $db = DBIx::Connector->new( "dbi:SQLite:$dbname", "", "" )
+      or app->log->error('Could not connect to database');
+};
+
+helper db => sub { shift->connector->dbh };
+
+helper select => sub {
+    my ( $self, $group ) = @_;
+    my $sth =
+      eval { $self->db->prepare('SELECT * FROM freqs where groups like ?') }
+      || return undef;
+    $sth->execute($group);
+    return $sth->fetchall_arrayref;
+};
+
+helper set_state => sub {
+    my ( $c, $status, $freq ) = @_;
+
+    # TODO:  Lookup freq info
+    # TODO:  Save interesting bits in a DB
+    my $info = 'Static for now';
+
+    my %detail = ( squelch => $status, freq => $freq, info => $info );
+    app->defaults( state => \%detail );
+};
+
+helper start_rtlfm => sub {
+    my $c = shift;
+
+    # errors to handle:
+    # dongle yanked:
+    #    rtlsdr_demod_write_reg failed with -1
+    #    rtlsdr_demod_read_reg failed with -4
+    #    cb transfer status: 5, canceling
+
+    if ( defined app->defaults('rtlfm_pid')) {
+	my $pid = app->defaults('rtlfm_pid');
+        app->log->info( sprintf( 'About to kill rtl_fm (pid: %s)', $pid ) );
+        kill 'HUP', $pid;
+	delete app->defaults->{rtlfm_pid};
+        Mojo::IOLoop->timer( 1 => sub { $c->start_rtlfm } );
+	return;
     }
-);
+    
+    app->log->info('about to start rtl_fm');
 
-my $rtlfm_pid;    # need to get rid of this global
-app->helper(
-    start_rtlfm => sub {
-        my $c = shift;
+    my @freqs = @{ app->select('%FRS%') };
 
-        # errors to handle:
-        # dongle yanked:
-        #    rtlsdr_demod_write_reg failed with -1
-        #    rtlsdr_demod_read_reg failed with -4
-        #    cb transfer status: 5, canceling
+    #app->log->info('database dump'.dumper(@freqs));
 
-        # TODO:  get frequencies from DB
-        my $cmd =
+    my @freq_args;
+    foreach my $freq_detail (@freqs) {
+        my $freq = $freq_detail->[0];
+        chomp($freq);
+        push @freq_args, sprintf( "-f %sM", $freq );
+    }
 
-#'/usr/local/bin/rtl_fm -M fm -p 34 -f 462.5625M -f 467.6375M -s 16k -l 80 -g 49.2 -E wav | aplay';
-'/usr/local/bin/rtl_fm -M fm -p 34 -f 462.5625M -f 467.6375M -s 16k -l 80 -g 49.2 -E wav /tmp/rtlfm_audio.wav';
+    my $cmd =
+"/usr/local/bin/rtl_fm -M fm -p 34 @freq_args -s 16k -l 80 -g 49.2 -E wav /tmp/rtlfm_audio.wav";
 
-        if ( defined $rtlfm_pid ) {
-            app->log->info(
-                sprintf( 'About to kill rtl_fm (pid%s)', $rtlfm_pid ) );
-            kill $rtlfm_pid;
-            undef $rtlfm_pid;
-        }
-
-        my $rtlfm_fifo;
-        my $rtlfm_pid = open( $rtlfm_fifo, "$cmd 2>&1 |" ) or do {
-
+    my $rtlfm_fifo;
+    my $rtlfm_pid = open( $rtlfm_fifo, "$cmd 2>&1 |" ) or do {
      # this will not be hit if rtl_fm command is executed and there is no dongle
-            app->log->error(
-                "Couldn't open the thing required for dongle interaction: $!");
-            return;
-        };
+        app->log->error(
+            "Couldn't open rtl_fm: $!");
+        return;
+    };
 
-        my $stream_in = Mojo::IOLoop::Stream->new($rtlfm_fifo);
+    my $stream_in = Mojo::IOLoop::Stream->new($rtlfm_fifo);
 
-        $stream_in = $stream_in->timeout(0);
-        $stream_in->on(
-            read => sub {
-                my ( $stream_in, $bytes ) = @_;
-                chomp($bytes);
-                if ( $bytes =~ /(OPEN|CLOSED)\|(\d+)/ ) {
-                    my $status   = $1;
-                    my $cur_freq = $2/1000000;
-                    app->set_state( $status, $cur_freq );
-                    app->log->info(
-                        sprintf( 'status: %s freq: %s', $status, $cur_freq ) );
-                }
-                elsif ( $bytes =~ /No supported devices found/ ) {
-                    app->log->error('No dongle connected!');
-
-                    # retry in a few seconds
-                    $c->delay(
-                        sub { Mojo::IOLoop->timer( 4 => shift->begin ) },
-                        sub { $c->start_rtlfm },
-                    );
-                    return;
-                }
-                else {
-                    app->log->info(
-                        sprintf( 'not sure what this is: %s', $bytes ) );
-                }
+    $stream_in = $stream_in->timeout(0);
+    $stream_in->on(
+        read => sub {
+            my ( $stream_in, $bytes ) = @_;
+            chomp($bytes);
+            if ( $bytes =~ /(OPEN|CLOSED)\|(\d+)/ ) {
+                my $status   = $1;
+                my $cur_freq = $2 / 1000000;
+                app->set_state( $status, $cur_freq );
+                app->log->info(
+                    sprintf( 'status: %s freq: %s', $status, $cur_freq ) );
             }
-        );
-        $stream_in->on(
-            close => sub {
-                my $stream_in = shift;
-                app->log->info('stream_in closed');
-            }
-        );
-        $stream_in->on(
-            error => sub {
-                my ( $stream_in, $err ) = @_;
-                app->log->info('stream_in error');
-            }
-        );
-        my $sid = Mojo::IOLoop->stream($stream_in);
-        $stream_in->on( finish => sub { Mojo::IOLoop->remove($sid) } );
+            elsif ( $bytes =~ /No supported devices found/ ) {
+                app->log->error('No dongle connected!');
 
-    }
-);
+                # retry in a few seconds
+                Mojo::IOLoop->timer( 6 => sub { $c->start_rtlfm } );
+                return;
+            }
+	    elsif ( $bytes =~ /Using device/ ) { # set pid here as rtl_fm can "open" and fail soon after
+		app->defaults( rtlfm_pid => $rtlfm_pid );
+            }
+            else {
+                app->log->info(
+                    sprintf( 'not sure what this is: %s', $bytes ) );
+            }
+        }
+    );
+    $stream_in->on(
+        close => sub {
+            my $stream_in = shift;
+            app->log->info('stream_in closed');
+        }
+    );
+    $stream_in->on(
+        error => sub {
+            my ( $stream_in, $err ) = @_;
+            app->log->info('stream_in error');
+        }
+    );
+    my $sid = Mojo::IOLoop->stream($stream_in);
+    $stream_in->on( finish => sub { Mojo::IOLoop->remove($sid) } );
+
+};
 
 app->start_rtlfm;
 
@@ -131,19 +158,23 @@ websocket '/output' => sub {
         json => sub {
             my ( $ws, $hash ) = @_;
 
-	    if ($hash->{type} eq 'pass') {
-		app->log->info(sprintf('Request to put a pass on %s', $hash->{freq}));
-	    }
+            if ( $hash->{type} eq 'pass' ) {
+                app->log->info(
+                    sprintf( 'Request to put a pass on %s', $hash->{freq} ) );
+		    # TODO:  Update db for this freq and then reload rtl_fm with refreshed list of freqs
+		    $c->start_rtlfm;
+            }
+
             #app->log->debug("Message: ".dumper($hash));
         }
     );
 
     $c->on(
-         finish => sub {
-             my ( $c, $code, $reason ) = @_;
-             Mojo::IOLoop->remove($id);
-             $c->app->log->debug("WebSocket closed with status $code.");
-         }
+        finish => sub {
+            my ( $c, $code, $reason ) = @_;
+            Mojo::IOLoop->remove($id);
+            $c->app->log->debug("WebSocket closed with status $code.");
+        }
     );
 };
 
