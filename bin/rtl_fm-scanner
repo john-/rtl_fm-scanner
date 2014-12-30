@@ -7,10 +7,8 @@ app->helper(
     set_state => sub {
         my ( $c, $status, $freq ) = @_;
 
-        # TODO:  Lookup freq info
-        # TODO:  Save interesting bits in a DB
-	# TODO: set the app->defaults with detail before scanner does so as user may load the index.html
-	# before it is populated.
+# TODO:  Lookup freq info
+# TODO:  Save interesting bits in a DB
         my $info = 'Static for now';
 
         my %detail = ( squelch => $status, freq => $freq, info => $info );
@@ -60,7 +58,7 @@ app->helper(
                 chomp($bytes);
                 if ( $bytes =~ /(OPEN|CLOSED)\|(\d+)/ ) {
                     my $status   = $1;
-                    my $cur_freq = $2;
+                    my $cur_freq = $2/1000000;
                     app->set_state( $status, $cur_freq );
                     app->log->info(
                         sprintf( 'status: %s freq: %s', $status, $cur_freq ) );
@@ -108,7 +106,7 @@ websocket '/output' => sub {
 
     $c->inactivity_timeout(15);
 
-    app->log->info( 'in websocket: ' . dumper( app->defaults('state') ) );
+    #app->log->info( 'in websocket: ' . dumper( app->defaults('state') ) );
 
     # need to stop the recurring loop when socket times out
     my $prev_val = 'none yet';
@@ -121,7 +119,8 @@ websocket '/output' => sub {
             # I probably need to track prev squelch state as well
             if ( $prev_val ne $cur_freq ) {
                 app->log->info("bytes for browser: |$cur_freq|\n");
-		$c = $c->send({json   => \%details});
+                $c = $c->send( { json => \%details } );
+
                 #$c->send( { text => $cur_freq . "\n" } );
                 $prev_val = $cur_freq;
             }
@@ -129,19 +128,23 @@ websocket '/output' => sub {
     );
 
     $c->on(
-	json => sub {
-	    my ($ws, $hash) = @_;
-	    
-	    app->log->debug("Message: $hash->{msg}");
-	}
+        json => sub {
+            my ( $ws, $hash ) = @_;
+
+	    if ($hash->{type} eq 'pass') {
+		app->log->info(sprintf('Request to put a pass on %s', $hash->{freq}));
+	    }
+            #app->log->debug("Message: ".dumper($hash));
+        }
     );
-#    $c->on(
-#        finish => sub {
-#            my ( $c, $code, $reason ) = @_;
-#            Mojo::IOLoop->remove($id);
-#            $c->app->log->debug("WebSocket closed with status $code.");
-#        }
-#    );
+
+    $c->on(
+         finish => sub {
+             my ( $c, $code, $reason ) = @_;
+             Mojo::IOLoop->remove($id);
+             $c->app->log->debug("WebSocket closed with status $code.");
+         }
+    );
 };
 
 app->start;
@@ -150,12 +153,54 @@ __DATA__
 
 @@ index.html.ep
 <html>
+<head>
 <script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.js"></script>
 <link rel="stylesheet" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/themes/smoothness/jquery-ui.css"/>
 <script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/jquery-ui.js"></script>
-
+</head>
+<body>
 <pre id="log"></pre>
-<script type="text/javascript">
+<button id="pass">Pass</button>
+<div class="ui-widget">
+    <input id="tags">
+</div>
+
+<script>
+
+$(document).ready(function() {
+
+var ws = new WebSocket('<%= url_for('output')->to_abs %>');
+var log = document.getElementById('log');
+var chaninfo;
+ws.onmessage = function (event) { 
+    chaninfo = JSON && JSON.parse(event.data) || $.parseJSON(data);
+    log.innerHTML += chaninfo.freq
+};
+
+// I am not sure what this does except make button bigger
+$(function() {
+    $( "#pass" ).button();
+});
+
+$( "#pass" ).click(function() {
+    //alert( "Handler for .click() called." );
+    sendText();
+});
+
+function sendText() {
+  // Construct a msg object containing the data the server needs to process the message from the chat client.
+  var msg = {
+    type: "pass",
+    freq: chaninfo.freq,
+    //text: document.getElementById("text").value,
+    //id:   clientID,
+    date: Date.now()
+  };
+
+  // Send the msg object as a JSON-formatted string.
+  ws.send(JSON.stringify(msg));
+}
+
 
 $(function() {
     var availableTags = [
@@ -168,24 +213,8 @@ $(function() {
         source: availableTags
     });
 });
-
-    $(document).ready(function() {
-       // do stuff when DOM is ready
-       alert('jquery loaded');
-    });
-
-</script>
-<script>
-  var ws = new WebSocket('<%= url_for('output')->to_abs %>');
-  var log = document.getElementById('log');
-  ws.onmessage = function (event) { 
-      var obj = JSON && JSON.parse(event.data) || $.parseJSON(data);
-      log.innerHTML += obj.freq
-  };
+});
 </script>
 
-<div class="ui-widget">
-    <input id="tags">
-</div>
-
+</body>
 </html>
