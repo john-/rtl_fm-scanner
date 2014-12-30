@@ -1,6 +1,6 @@
-rtl-fm_scanner
+rtl_fm-scanner
 ==============
-This is a a websocket interface to rtl_fm (part of RTL-SDR).
+This is a websocket interface to rtl_fm (part of RTL-SDR).
 
 Dependencies
 ------------
