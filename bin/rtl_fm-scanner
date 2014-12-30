@@ -135,7 +135,13 @@ websocket '/output' => sub {
 
     #app->log->info( 'in websocket: ' . dumper( app->defaults('state') ) );
 
-    # need to stop the recurring loop when socket times out
+    # There must be a better way of addressing this.  Requirements are that there is a long running
+    # process started when aplication starts (see above).  This process needs to exist independently
+    # of client conntections.  I could not figure out a way for this client specifc code to wait for
+    # a change in the output from the long running process.  Therefore, it is checking if a global
+    # that contains current state of that process differs from what was sent to client previously.
+    # If it does differ it is sent to client.  Otherwise it is ignored.
+    # In this application there will be at most 2 clients connecting.
     my $prev_val = 'none yet';
     my $id       = Mojo::IOLoop->recurring(
         0.25 => sub {
@@ -147,8 +153,6 @@ websocket '/output' => sub {
             if ( $prev_val ne $cur_freq ) {
                 app->log->info("bytes for browser: |$cur_freq|\n");
                 $c = $c->send( { json => \%details } );
-
-                #$c->send( { text => $cur_freq . "\n" } );
                 $prev_val = $cur_freq;
             }
         }
