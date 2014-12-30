@@ -1,0 +1,5 @@
+# Ignore everything in this directory
+# It contains files that are install specific and/or created at run time
+*
+# Except this file
+!.gitignore
