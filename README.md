@@ -5,7 +5,7 @@ This is a websocket interface to rtl_fm (part of RTL-SDR).
 Dependencies
 ------------
 
-* A version of rtl_fm that outputs frequency when squelch opens.  At time of creating this rtl_fm-scanner this capability did not exist in stock version.
+* A version of rtl_fm that outputs frequency when squelch opens.  At time of creating rtl_fm-scanner this capability did not exist in stock version.
 * Mojolicious
 * aplay (part of the Advanced Linux Sound Architecture).
 
