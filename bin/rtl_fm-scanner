@@ -49,7 +49,7 @@ helper start_rtlfm => sub {
         app->log->info( sprintf( 'About to kill rtl_fm (pid: %s)', $pid ) );
         kill 'HUP', $pid;
 	delete app->defaults->{rtlfm_pid};
-        Mojo::IOLoop->timer( 1 => sub { $c->start_rtlfm } );
+        Mojo::IOLoop->timer( 1 => sub { $c->start_rtlfm } );  # Killed process needs time to exit
 	return;
     }
     
@@ -67,7 +67,9 @@ helper start_rtlfm => sub {
     }
 
     my $cmd =
-"/usr/local/bin/rtl_fm -M fm -p 34 @freq_args -s 16k -l 80 -g 49.2 -E wav /tmp/rtlfm_audio.wav";
+"/usr/local/bin/rtl_fm -M fm -p 34 @freq_args -s 12k -l 80 -g 49.2 -E pad  /tmp/rtlfm_audio.wav";
+
+    app->log->info('You must read audio from fifo: aplay -f S16_LE -r 12000 /tmp/rtlfm_audio.wav');
 
     my $rtlfm_fifo;
     my $rtlfm_pid = open( $rtlfm_fifo, "$cmd 2>&1 |" ) or do {
