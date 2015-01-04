@@ -222,7 +222,7 @@ __DATA__
     <input id="tags">
 </div>
 <audio id="player" controls>
-  <source src="<%= url_for('audio')->to_abs %>?file=467637500-20150103065558.audio" type="audio/wav">
+//  <source src="<%= url_for('audio')->to_abs %>?file=467637500-20150103065558.audio" type="audio/wav">
 Your browser does not support the audio element.
 </audio> 
 
@@ -253,8 +253,8 @@ player.onended = function() {
     player.play;
 };
 
-var audio = new Audio("<%= url_for('audio')->to_abs %>?file=467637500-20150103065558.audio");
-audio.play(); 
+//var audio = new Audio("<%= url_for('audio')->to_abs %>?file=467637500-20150103065558.audio");
+//audio.play(); 
 
 // I am not sure what this does except make button bigger
 $(function() {
