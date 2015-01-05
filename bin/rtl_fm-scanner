@@ -3,13 +3,17 @@
 use Mojolicious::Lite;
 use Mojo::IOLoop;
 use Mojo::Util qw(dumper);
-use DBIx::Connector;
+use DBIx::Connector; # DBIx is probably overkill.  TODO:  Use DBI instead.
 
 app->plugin('RenderFile');
 
 app->secrets( ['Specfying a secret to make the reminder go away.'] );
 
 my $dbname = '../data/freqs.db';
+
+my $trans_id = 0;
+app->defaults( state => () );
+
 
 helper connector => sub {
     state $db = DBIx::Connector->new( "dbi:SQLite:$dbname", "", "" )
@@ -34,8 +38,23 @@ helper set_state => sub {
     # TODO:  Save interesting bits in a DB
     my $info = 'Static for now';
 
-    my %detail = ( squelch => $status, freq => $freq, info => $info, file => $file, time => time() );
-    app->defaults( state => \%detail );
+    my $detail;
+    if ($status eq 'OPEN') {
+        $detail = { freq => $freq,
+		       info => $info,
+		       file => $file,
+		       trans_id => $trans_id,
+		       start => time(),
+	             };
+
+        app->defaults( state => $detail );
+    } else {
+        $detail  = app->defaults('state');
+	$detail->{end} = time();
+        app->defaults( state => $detail );
+	$trans_id++;
+    }
+
 };
 
 helper start_rtlfm => sub {
@@ -165,18 +184,17 @@ websocket '/output' => sub {
     # that contains current state of that process differs from what was sent to client previously.
     # If it does differ it is sent to client.  Otherwise it is ignored.
     # In this application there will be at most 2 clients connecting.
-    my $prev_time = 0;
+    my $trans_ref = 0;
     my $id       = Mojo::IOLoop->recurring(
         0.25 => sub {
             my $loop     = shift;
             my %details  = %{ app->defaults('state') };
-            my $cur_time = $details{time};
 
-	    if (($details{squelch} eq 'OPEN') || ($prev_time == $cur_time)) { return; };
+	    if ($trans_ref == $trans_id) { return };
 
             $c = $c->send( { json => \%details } );
 	    app->log->info( sprintf('let client know about %s', $details{file}) );
-            $prev_time = $cur_time;
+            $trans_ref = $trans_id;
         }
     );
 
@@ -244,7 +262,7 @@ ws.onmessage = function (event) {
     log.innerHTML += JSON.stringify(chaninfo) + "\n";
     //log.innerHTML += chaninfo.file;
     player.src = '<%= url_for('audio')->to_abs %>?file=' + chaninfo.file;
-    player.play();
+    player.play();   // probably need to play when not already playing
 };
 
 //var aud = document.getElementById("player");
