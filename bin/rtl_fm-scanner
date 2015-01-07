@@ -103,7 +103,7 @@ helper start_rtlfm => sub {
 
     my $stream_in = Mojo::IOLoop::Stream->new($rtlfm_fifo);
 
-    app->set_state( 'Stopped', 'None', 'None' );
+    #app->set_state( 'Stopped', 'None', 'None' );
     $stream_in = $stream_in->timeout(0);
     $stream_in->on(
         read => sub {
@@ -188,9 +188,10 @@ websocket '/output' => sub {
     my $id       = Mojo::IOLoop->recurring(
         0.25 => sub {
             my $loop     = shift;
-            my %details  = %{ app->defaults('state') };
 
 	    if ($trans_ref == $trans_id) { return };
+
+            my %details  = %{ app->defaults('state') };
 
             $c = $c->send( { json => \%details } );
 	    app->log->info( sprintf('let client know about %s', $details{file}) );
@@ -227,91 +228,89 @@ app->start;
 __DATA__
 
 @@ index.html.ep
+<!DOCTYPE html>
 <html>
 <head>
-<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.js"></script>
-<link rel="stylesheet" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/themes/smoothness/jquery-ui.css"/>
-<script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/jquery-ui.js"></script>
+    <title>rtl_fm-scanner</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.css" />
+    <script src="http://code.jquery.com/jquery-1.11.2.js"></script>
+    <script src="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.js"></script>
 </head>
 <body>
-<pre id="log"></pre>
-<button id="pass">Pass</button>
-<div class="ui-widget">
-    <input id="tags">
-</div>
-<audio id="player" controls>
-//  <source src="<%= url_for('audio')->to_abs %>?file=467637500-20150103065558.audio" type="audio/wav">
-Your browser does not support the audio element.
-</audio> 
+<!-- Start of first page -->
+<div data-role="page" id="scan">
 
-<script>
+    <div data-role="header">
+    <h1>Scanner</h1>
+    </div><!-- /header -->
 
-$(document).ready(function() {
+    <div role="main" class="ui-content">
 
+    <p>
+    <audio id="player" controls>
+    Your browser does not support the audio element.
+    </audio>
+    </p>
 
-var ws = new WebSocket('<%= url_for('output')->to_abs %>');
-var log = document.getElementById('log');
-var player = document.getElementById('player');
-var chaninfo;
-//var clips_list = JSON.parse('{ "clips" : [] }');
-var clips = [];
-ws.onmessage = function (event) { 
-    chaninfo = JSON && JSON.parse(event.data) || $.parseJSON(data);
-    clips.push(chaninfo);
-    jsonStr2 = JSON.stringify(clips);
-    log.innerHTML += JSON.stringify(chaninfo) + "\n";
-    //log.innerHTML += chaninfo.file;
-    player.src = '<%= url_for('audio')->to_abs %>?file=' + chaninfo.file;
-    player.play();   // probably need to play when not already playing
-};
+    <ul data-role="listview" id="xmits">
+    </ul>
 
-//var aud = document.getElementById("player");
-player.onended = function() {
-    //alert("The audio has ended");
-    player.play;
-};
+    <script>
+    $(document).on("pagecreate",function(){
+    
+    var ws = new WebSocket('<%= url_for('output')->to_abs %>');
 
-//var audio = new Audio("<%= url_for('audio')->to_abs %>?file=467637500-20150103065558.audio");
-//audio.play(); 
+    var player = document.getElementById('player');
+    //var xmits  = document.getElementById('xmits');
+    var chaninfo;
+    var clips = [];
+    ws.onmessage = function (event) {
+        chaninfo = JSON && JSON.parse(event.data) || $.parseJSON(data);
+        clips.push(chaninfo);
+        jsonStr2 = JSON.stringify(clips);
+        var item = '<li><a href="#">'+chaninfo.freq+'</a></li>';
+        $('#xmits').append(item).listview('refresh');
+        player.src = '<%= url_for('audio')->to_abs %>?file=' + chaninfo.file;
+        if (!player.playing) { console.log('nothing playing') };
+        if (!player.playing) { // Setting the source above appears to stop playback
+            console.log('about to tell player to play');
+            player.play()
+        };
+    };
 
-// I am not sure what this does except make button bigger
-$(function() {
-    $( "#pass" ).button();
-});
-
-$( "#pass" ).click(function() {
-    //alert( "Handler for .click() called." );
-    sendText();
-});
-
-function sendText() {
-  // Construct a msg object containing the data the server needs to process the message from the chat client.
-  var msg = {
-    type: "pass",
-    freq: chaninfo.freq,
-    //text: document.getElementById("text").value,
-    //id:   clientID,
-    date: Date.now()
-  };
-
-  // Send the msg object as a JSON-formatted string.
-  ws.send(JSON.stringify(msg));
-}
+    player.onended = function() {
+        console.log('The audio has ended');
+        $('#xmits li').eq(0).remove();
+        player.play;
+    };
 
 
-$(function() {
-    var availableTags = [
-        "Item1",
-        "Item2",
-        "Now3",
-        "And4"
-    ];
-    $( "#tags" ).autocomplete({
-        source: availableTags
-    });
-});
-});
-</script>
+    }); 
 
+    </script>
+
+    </div><!-- /content -->
+
+    <div data-role="footer">
+    <h4>Page Footer</h4>
+    </div><!-- /footer -->
+</div><!-- /page -->
+
+<!-- Start of second page -->
+<div data-role="page" id="freq_list">
+
+    <div data-role="header">
+    <h1>Frequency List</h1>
+    </div><!-- /header -->
+
+    <div role="main" class="ui-content">
+    <p><a href="#scan">Back to scan page</a></p>
+    </div><!-- /content -->
+
+    <div data-role="footer">
+    <h4>Page Footer</h4>
+    </div><!-- /footer -->
+</div><!-- /page -->
 </body>
 </html>
