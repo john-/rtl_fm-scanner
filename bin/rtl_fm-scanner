@@ -34,8 +34,8 @@ helper select => sub {
 helper set_state => sub {
     my ( $c, $status, $freq, $file ) = @_;
 
-    # TODO:  Lookup freq info
-    # TODO:  Save interesting bits in a DB
+    # TODO:  Lookup freq info on squelch open
+    # TODO:  Save interesting bits in a DB on open/close
     my $info = 'Static for now';
 
     my $detail;
@@ -271,18 +271,23 @@ __DATA__
         jsonStr2 = JSON.stringify(clips);
         var item = '<li><a href="#">'+chaninfo.freq+'</a></li>';
         $('#xmits').append(item).listview('refresh');
-        player.src = '<%= url_for('audio')->to_abs %>?file=' + chaninfo.file;
-        if (!player.playing) { console.log('nothing playing') };
-        if (!player.playing) { // Setting the source above appears to stop playback
-            console.log('about to tell player to play');
-            player.play()
-        };
+        if (clips.length == 1) { next_xmit() };
     };
+
+    next_xmit = function() {
+        var clip = clips[0];
+        console.log(clip);
+        if (clip) {
+            player.src = '<%= url_for('audio')->to_abs %>?file=' + clip.file;
+            player.play();
+        }
+    }
 
     player.onended = function() {
         console.log('The audio has ended');
         $('#xmits li').eq(0).remove();
-        player.play;
+        clips.shift();
+        next_xmit();
     };
 
 
