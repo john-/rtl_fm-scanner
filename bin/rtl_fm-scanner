@@ -31,29 +31,29 @@ helper select => sub {
     return $sth->fetchall_arrayref;
 };
 
-helper get_designator => sub {
-    my ( $self, $freq ) = @_;
-    my $sth =
-        eval { $self->db->prepare('SELECT designator FROM freqs where frequency = ? order by time desc limit 1') };
-    $sth->execute($freq);
-    my $designator = $sth->fetchrow_array;
-    #app->log->debug(dumper($designator));
-    return $designator;
-};
+#helper get_designator => sub {
+#    my ( $self, $freq ) = @_;
+#    my $sth =
+#        eval { $self->db->prepare('SELECT designator FROM freqs where frequency = ? order by time desc limit 1') };
+#   $sth->execute($freq);
+#    my $designator = $sth->fetchrow_array;
+#    #app->log->debug(dumper($designator));
+#   return $designator;
+#};
 
 helper set_state => sub {
     my ( $c, $status, $freq, $file ) = @_;
 
-    # TODO:  Lookup freq info on squelch open
     # TODO:  Save interesting bits in a DB on open/close
 
     my $detail;
     if ($status eq 'OPEN') {
+        my $scan_list = app->defaults('scan_list');
         $detail = { freq => $freq,
 		       file => $file,
 		       trans_id => $trans_id,
 		       start => time(),
-		       designator => app->get_designator($freq),
+		       designator => $scan_list->{$freq}{designator},
 	             };
 
         app->defaults( state => $detail );
@@ -92,11 +92,17 @@ helper start_rtlfm => sub {
     #app->log->info('database dump'.dumper(@freqs));
 
     my @freq_args;
+    my %scan_list;
     foreach my $freq_detail (@freqs) {
         my $freq = $freq_detail->[0];
         chomp($freq);
         push @freq_args, sprintf( "-f %sM", $freq );
+	$scan_list{$freq} = { designator => $freq_detail->[1] };
     }
+
+    app->defaults( scan_list => \%scan_list );
+
+    #app->log->debug(dumper(app->defaults->{scan_list}));
 
     my $cmd =
 "/usr/local/bin/rtl_fm -M fm -p 34 @freq_args -s 12k -l 80 -g 49.2 -E wav -n ../archive /tmp/ignored.out";
