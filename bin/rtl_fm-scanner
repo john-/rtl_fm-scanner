@@ -31,23 +31,33 @@ helper select => sub {
     return $sth->fetchall_arrayref;
 };
 
+helper get_designator => sub {
+    my ( $self, $freq ) = @_;
+    my $sth =
+        eval { $self->db->prepare('SELECT designator FROM freqs where frequency = ? order by time desc limit 1') };
+    $sth->execute($freq);
+    my $designator = $sth->fetchrow_array;
+    #app->log->debug(dumper($designator));
+    return $designator;
+};
+
 helper set_state => sub {
     my ( $c, $status, $freq, $file ) = @_;
 
     # TODO:  Lookup freq info on squelch open
     # TODO:  Save interesting bits in a DB on open/close
-    my $info = 'Static for now';
 
     my $detail;
     if ($status eq 'OPEN') {
         $detail = { freq => $freq,
-		       info => $info,
 		       file => $file,
 		       trans_id => $trans_id,
 		       start => time(),
+		       designator => app->get_designator($freq),
 	             };
 
         app->defaults( state => $detail );
+	app->log->debug(app->dumper($detail));
     } else {
         $detail  = app->defaults('state');
 	$detail->{end} = time();
@@ -269,7 +279,7 @@ __DATA__
         chaninfo = JSON && JSON.parse(event.data) || $.parseJSON(data);
         clips.push(chaninfo);
         jsonStr2 = JSON.stringify(clips);
-        var item = '<li><a href="#">'+chaninfo.freq+'</a></li>';
+        var item = '<li><a href="#">'+chaninfo.designator+'</a></li>';
         $('#xmits').append(item).listview('refresh');
         if (clips.length == 1) { next_xmit() };
     };
