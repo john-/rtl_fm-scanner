@@ -3,7 +3,9 @@
 use Mojolicious::Lite;
 use Mojo::IOLoop;
 use Mojo::Util qw(dumper);
-use DBIx::Connector; # DBIx is probably overkill.  TODO:  Use DBI instead.
+use DBIx::Connector;
+
+use constant AUTO_PASS => 2;
 
 app->plugin('RenderFile');
 
@@ -12,9 +14,8 @@ app->secrets( ['Specfying a secret to make the reminder go away.'] );
 my $dbname = '../data/freqs.db';
 
 my $trans_id = 0;
-my $xmit_timer;
+my $xmit_timer;  # stores the id of the loop that limits length of xmit
 app->defaults( state => () );
-
 
 helper connector => sub {
     state $db = DBIx::Connector->new( "dbi:SQLite:$dbname", "", "" )
@@ -38,7 +39,7 @@ helper update_pass => sub {
     my $sth =
 	eval { $self->db->prepare('UPDATE freqs SET pass=? WHERE frequency = ? AND designator = ?') }
 	       || return undef;
-    $sth->execute( 1, $freq, $designator );
+    $sth->execute( AUTO_PASS, $freq, $designator );
 };
 
 helper set_state => sub {
@@ -66,8 +67,6 @@ helper set_state => sub {
 	    app->log->debug( sprintf( 'Set pass on %s (%s)', $freq, $designator ) );
             $c->start_rtlfm;
         } );
-	#app->log->debug("id: $id");
-
     } else {
 	Mojo::IOLoop->remove($xmit_timer);
         $detail  = app->defaults('state');
@@ -130,7 +129,6 @@ helper start_rtlfm => sub {
 
     my $stream_in = Mojo::IOLoop::Stream->new($rtlfm_fifo);
 
-    #app->set_state( 'Stopped', 'None', 'None' );
     $stream_in = $stream_in->timeout(0);
     $stream_in->on(
         read => sub {
