@@ -12,6 +12,7 @@ app->secrets( ['Specfying a secret to make the reminder go away.'] );
 my $dbname = '../data/freqs.db';
 
 my $trans_id = 0;
+my $xmit_timer;
 app->defaults( state => () );
 
 
@@ -24,22 +25,21 @@ helper db => sub { shift->connector->dbh };
 
 helper select => sub {
     my ( $self, $group ) = @_;
+    # TODO:  At some point limit based on current year or something.
     my $sth =
-      eval { $self->db->prepare('SELECT * FROM freqs where groups like ?') }
+      eval { $self->db->prepare('SELECT * FROM freqs where groups like ? and pass=0') }
       || return undef;
     $sth->execute($group);
     return $sth->fetchall_arrayref;
 };
 
-#helper get_designator => sub {
-#    my ( $self, $freq ) = @_;
-#    my $sth =
-#        eval { $self->db->prepare('SELECT designator FROM freqs where frequency = ? order by time desc limit 1') };
-#   $sth->execute($freq);
-#    my $designator = $sth->fetchrow_array;
-#    #app->log->debug(dumper($designator));
-#   return $designator;
-#};
+helper update_pass => sub {
+    my ( $self, $freq, $designator ) = @_;
+    my $sth =
+	eval { $self->db->prepare('UPDATE freqs SET pass=? WHERE frequency = ? AND designator = ?') }
+	       || return undef;
+    $sth->execute( 1, $freq, $designator );
+};
 
 helper set_state => sub {
     my ( $c, $status, $freq, $file ) = @_;
@@ -49,16 +49,27 @@ helper set_state => sub {
     my $detail;
     if ($status eq 'OPEN') {
         my $scan_list = app->defaults('scan_list');
+	my $designator = $scan_list->{$freq}{designator};
         $detail = { freq => $freq,
 		       file => $file,
 		       trans_id => $trans_id,
 		       start => time(),
-		       designator => $scan_list->{$freq}{designator},
+		       designator => $designator,
 	             };
 
         app->defaults( state => $detail );
 	app->log->debug(app->dumper($detail));
+	# start timer to stop open mic/long data
+        $xmit_timer = Mojo::IOLoop->timer( 10 => sub {
+	    my $loop = shift;
+	    app->update_pass($freq, $designator);
+	    app->log->debug( sprintf( 'Set pass on %s (%s)', $freq, $designator ) );
+            $c->start_rtlfm;
+        } );
+	#app->log->debug("id: $id");
+
     } else {
+	Mojo::IOLoop->remove($xmit_timer);
         $detail  = app->defaults('state');
 	$detail->{end} = time();
         app->defaults( state => $detail );
@@ -181,17 +192,12 @@ get '/audio' => sub {
         #'format'   => 'pdf',                 # will change Content-Type "application/x-download" to "application/pdf"
         'content_disposition' => 'inline',   # will change Content-Disposition from "attachment" to "inline"
 	);
-
-
-    #$c->render(text => "You want $file.");
 };
 
 websocket '/output' => sub {
     my $c = shift;
 
     $c->inactivity_timeout(60);
-
-    #app->log->info( 'in websocket: ' . dumper( app->defaults('state') ) );
 
     # There must be a better way of addressing this.  Requirements are that there is a long running
     # process started when aplication starts (see above).  This process needs to exist independently
@@ -223,6 +229,7 @@ websocket '/output' => sub {
                 app->log->info(
                     sprintf( 'Request to put a pass on %s', $hash->{freq} ) );
 		    # TODO:  Update db for this freq and then reload rtl_fm with refreshed list of freqs
+                    app->update_pass($hash->{freq}, $hash->{designator});
 		    $c->start_rtlfm;
             }
 

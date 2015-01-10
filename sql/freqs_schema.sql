@@ -6,7 +6,7 @@ create table freqs (
 	time date,
         lat real,
 	long real,
-	pass integer,
+	pass integer default 0,
 	unique (frequency,designator)
 );
 
