@@ -14,7 +14,7 @@ app->secrets( ['Specfying a secret to make the reminder go away.'] );
 my $dbname = '../data/freqs.db';
 
 my $trans_id = 0;
-my $xmit_timer;  # stores the id of the loop that limits length of xmit
+my $xmit_timer;    # stores the id of the loop that limits length of xmit
 app->defaults( state => () );
 
 helper connector => sub {
@@ -26,9 +26,12 @@ helper db => sub { shift->connector->dbh };
 
 helper select => sub {
     my ( $self, $group ) = @_;
+
     # TODO:  At some point limit based on current year or something.
-    my $sth =
-      eval { $self->db->prepare('SELECT * FROM freqs where groups like ? and pass=0') }
+    my $sth = eval {
+        $self->db->prepare(
+            'SELECT * FROM freqs where groups like ? and pass=0');
+    }
       || return undef;
     $sth->execute($group);
     return $sth->fetchall_arrayref;
@@ -36,9 +39,11 @@ helper select => sub {
 
 helper update_pass => sub {
     my ( $self, $freq, $designator ) = @_;
-    my $sth =
-	eval { $self->db->prepare('UPDATE freqs SET pass=? WHERE frequency = ? AND designator = ?') }
-	       || return undef;
+    my $sth = eval {
+        $self->db->prepare(
+            'UPDATE freqs SET pass=? WHERE frequency = ? AND designator = ?');
+    }
+      || return undef;
     $sth->execute( AUTO_PASS, $freq, $designator );
 };
 
@@ -48,31 +53,37 @@ helper set_state => sub {
     # TODO:  Save interesting bits in a DB on open/close
 
     my $detail;
-    if ($status eq 'OPEN') {
-        my $scan_list = app->defaults('scan_list');
-	my $designator = $scan_list->{$freq}{designator};
-        $detail = { freq => $freq,
-		       file => $file,
-		       trans_id => $trans_id,
-		       start => time(),
-		       designator => $designator,
-	             };
+    if ( $status eq 'OPEN' ) {
+        my $scan_list  = app->defaults('scan_list');
+        my $designator = $scan_list->{$freq}{designator};
+        $detail = {
+            freq       => $freq,
+            file       => $file,
+            trans_id   => $trans_id,
+            start      => time(),
+            designator => $designator,
+        };
 
         app->defaults( state => $detail );
-	app->log->debug(app->dumper($detail));
-	# start timer to stop open mic/long data
-        $xmit_timer = Mojo::IOLoop->timer( 10 => sub {
-	    my $loop = shift;
-	    app->update_pass($freq, $designator);
-	    app->log->debug( sprintf( 'Set pass on %s (%s)', $freq, $designator ) );
-            $c->start_rtlfm;
-        } );
-    } else {
-	Mojo::IOLoop->remove($xmit_timer);
-        $detail  = app->defaults('state');
-	$detail->{end} = time();
+        app->log->debug( app->dumper($detail) );
+
+        # start timer to stop open mic/long data
+        $xmit_timer = Mojo::IOLoop->timer(
+            10 => sub {
+                my $loop = shift;
+                app->update_pass( $freq, $designator );
+                app->log->debug(
+                    sprintf( 'Set pass on %s (%s)', $freq, $designator ) );
+                $c->start_rtlfm;
+            }
+        );
+    }
+    else {
+        Mojo::IOLoop->remove($xmit_timer);
+        $detail = app->defaults('state');
+        $detail->{end} = time();
         app->defaults( state => $detail );
-	$trans_id++;
+        $trans_id++;
     }
 
 };
@@ -86,15 +97,16 @@ helper start_rtlfm => sub {
     #    rtlsdr_demod_read_reg failed with -4
     #    cb transfer status: 5, canceling
 
-    if ( defined app->defaults('rtlfm_pid')) {
-	my $pid = app->defaults('rtlfm_pid');
+    if ( defined app->defaults('rtlfm_pid') ) {
+        my $pid = app->defaults('rtlfm_pid');
         app->log->info( sprintf( 'About to kill rtl_fm (pid: %s)', $pid ) );
         kill 'HUP', $pid;
-	delete app->defaults->{rtlfm_pid};
-        Mojo::IOLoop->timer( 1 => sub { $c->start_rtlfm } );  # Killed process needs time to exit
-	return;
+        delete app->defaults->{rtlfm_pid};
+        Mojo::IOLoop->timer( 1 => sub { $c->start_rtlfm } )
+          ;    # Killed process needs time to exit
+        return;
     }
-    
+
     app->log->info('about to start rtl_fm');
 
     my @freqs = @{ app->select('%FRS%') };
@@ -107,7 +119,7 @@ helper start_rtlfm => sub {
         my $freq = $freq_detail->[0];
         chomp($freq);
         push @freq_args, sprintf( "-f %sM", $freq );
-	$scan_list{$freq} = { designator => $freq_detail->[1] };
+        $scan_list{$freq} = { designator => $freq_detail->[1] };
     }
 
     app->defaults( scan_list => \%scan_list );
@@ -117,13 +129,13 @@ helper start_rtlfm => sub {
     my $cmd =
 "/usr/local/bin/rtl_fm -M fm -p 34 @freq_args -s 12k -l 80 -g 49.2 -E wav -n ../archive /tmp/ignored.out";
 
-    #app->log->info('You must read audio from fifo: aplay -f S16_LE -r 12000 /tmp/rtlfm_audio.wav');
+#app->log->info('You must read audio from fifo: aplay -f S16_LE -r 12000 /tmp/rtlfm_audio.wav');
 
     my $rtlfm_fifo;
     my $rtlfm_pid = open( $rtlfm_fifo, "$cmd 2>&1 |" ) or do {
+
      # this will not be hit if rtl_fm command is executed and there is no dongle
-        app->log->error(
-            "Couldn't open rtl_fm: $!");
+        app->log->error("Couldn't open rtl_fm: $!");
         return;
     };
 
@@ -134,14 +146,19 @@ helper start_rtlfm => sub {
         read => sub {
             my ( $stream_in, $bytes ) = @_;
             chomp($bytes);
-	    # I probably need to seperate OPEN from CLOSED
+
+            # I probably need to seperate OPEN from CLOSED
             if ( $bytes =~ /(OPEN|CLOSED)\|(\d+)\|(.+)/ ) {
                 my $status   = $1;
                 my $cur_freq = $2 / 1000000;
-		my $file     = $3;
+                my $file     = $3;
                 app->set_state( $status, $cur_freq, $file );
                 app->log->info(
-                    sprintf( 'status: %s freq: %s file: %s', $status, $cur_freq, $file ) );
+                    sprintf(
+                        'status: %s freq: %s file: %s',
+                        $status, $cur_freq, $file
+                    )
+                );
             }
             elsif ( $bytes =~ /No supported devices found/ ) {
                 app->log->error('No dongle connected!');
@@ -150,8 +167,9 @@ helper start_rtlfm => sub {
                 Mojo::IOLoop->timer( 6 => sub { $c->start_rtlfm } );
                 return;
             }
-	    elsif ( $bytes =~ /Using device/ ) { # set pid here as rtl_fm can "open" and fail soon after
-		app->defaults( rtlfm_pid => $rtlfm_pid );
+            elsif ( $bytes =~ /Using device/ )
+            {    # set pid here as rtl_fm can "open" and fail soon after
+                app->defaults( rtlfm_pid => $rtlfm_pid );
             }
             else {
                 app->log->info(
@@ -187,9 +205,11 @@ get '/audio' => sub {
     # Open file in browser(do not show save dialog)
     $c->render_file(
         'filepath' => "../archive/$file",
-        #'format'   => 'pdf',                 # will change Content-Type "application/x-download" to "application/pdf"
-        'content_disposition' => 'inline',   # will change Content-Disposition from "attachment" to "inline"
-	);
+
+#'format'   => 'pdf',                 # will change Content-Type "application/x-download" to "application/pdf"
+        'content_disposition' => 'inline'
+        ,    # will change Content-Disposition from "attachment" to "inline"
+    );
 };
 
 websocket '/output' => sub {
@@ -197,24 +217,25 @@ websocket '/output' => sub {
 
     $c->inactivity_timeout(60);
 
-    # There must be a better way of addressing this.  Requirements are that there is a long running
-    # process started when aplication starts (see above).  This process needs to exist independently
-    # of client conntections.  I could not figure out a way for this client specifc code to wait for
-    # a change in the output from the long running process.  Therefore, it is checking if a global
-    # that contains current state of that process differs from what was sent to client previously.
-    # If it does differ it is sent to client.  Otherwise it is ignored.
-    # In this application there will be at most 2 clients connecting.
+# There must be a better way of addressing this.  Requirements are that there is a long running
+# process started when aplication starts (see above).  This process needs to exist independently
+# of client conntections.  I could not figure out a way for this client specifc code to wait for
+# a change in the output from the long running process.  Therefore, it is checking if a global
+# that contains current state of that process differs from what was sent to client previously.
+# If it does differ it is sent to client.  Otherwise it is ignored.
+# In this application there will be at most 2 clients connecting.
     my $trans_ref = 0;
-    my $id       = Mojo::IOLoop->recurring(
+    my $id        = Mojo::IOLoop->recurring(
         0.25 => sub {
-            my $loop     = shift;
+            my $loop = shift;
 
-	    if ($trans_ref == $trans_id) { return };
+            if ( $trans_ref == $trans_id ) { return }
 
-            my %details  = %{ app->defaults('state') };
+            my %details = %{ app->defaults('state') };
 
             $c = $c->send( { json => \%details } );
-	    app->log->info( sprintf('let client know about %s', $details{file}) );
+            app->log->info(
+                sprintf( 'let client know about %s', $details{file} ) );
             $trans_ref = $trans_id;
         }
     );
@@ -226,9 +247,10 @@ websocket '/output' => sub {
             if ( $hash->{type} eq 'pass' ) {
                 app->log->info(
                     sprintf( 'Request to put a pass on %s', $hash->{freq} ) );
-		    # TODO:  Update db for this freq and then reload rtl_fm with refreshed list of freqs
-                    app->update_pass($hash->{freq}, $hash->{designator});
-		    $c->start_rtlfm;
+
+# TODO:  Update db for this freq and then reload rtl_fm with refreshed list of freqs
+                app->update_pass( $hash->{freq}, $hash->{designator} );
+                $c->start_rtlfm;
             }
 
             #app->log->debug("Message: ".dumper($hash));
