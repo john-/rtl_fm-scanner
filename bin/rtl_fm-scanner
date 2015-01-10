@@ -224,6 +224,8 @@ get '/audio' => sub {
     );
 };
 
+get '/freqs' => { template => 'freqs' };
+
 websocket '/output' => sub {
     my $c = shift;
 
@@ -297,7 +299,6 @@ __DATA__
 <div data-role="page" data-dom-cache="true" id="scan">
 
     <div data-role="header">
-    <h1>Scanner</h1>
     </div><!-- /header -->
 
     <div role="main" class="ui-content">
@@ -311,7 +312,19 @@ __DATA__
     <ul data-role="listview" id="xmits">
     </ul>
 
-    <p><a href="#freq_list">Frequency List</a></p>
+    <div data-role="tabs" id="tabs">
+          <div data-role="navbar">
+        <ul>
+          <li><a href="#one" data-ajax="false">Leaderboard</a></li>
+          <li><a href="<%= url_for('freqs')->to_abs %>" data-ajax="false">Frequencies</a></li>
+          <li><a href="ajax-content.html" data-ajax="false">TBD</a></li>
+        </ul>
+          </div>
+          <div id="one" class="ui-body-d ui-content">
+            <h1>First tab contents</h1>
+          </div>
+        </div>
+      </div>
 
 
     <script>
@@ -369,7 +382,7 @@ __DATA__
 
     <div role="main" class="ui-content">
 
-    <ul data-role="listview">
+    <ul data-role="listview" data-inset="true">
     % foreach my $freq (sort keys %$freq_list) {
     <li><a href="#"><%= sprintf('%s (%s)', $freq_list->{$freq}{designator}, $freq) %><span class="ui-li-count"><%= $freq_list->{$freq}{count} %></span></a></li>
     % }
@@ -385,3 +398,19 @@ __DATA__
 </div><!-- /page -->
 </body>
 </html>
+
+
+@@ freqs.html.ep
+
+<html>
+
+<body>
+
+    <ul data-role="listview" id="freqs">
+    % foreach my $freq (sort keys %$freq_list) {
+    <li><a href="#"><%= sprintf('%s (%s)', $freq_list->{$freq}{designator}, $freq) %><span class="ui-li-count"><%= $freq_list->{$freq}{count} %></span></a></li>
+    % }
+    </ul>
+
+</body>
+<html>
