@@ -312,19 +312,20 @@ __DATA__
     <ul data-role="listview" id="xmits">
     </ul>
 
-    <div data-role="tabs" id="tabs">
-          <div data-role="navbar">
-        <ul>
-          <li><a href="#one" data-ajax="false">Leaderboard</a></li>
-          <li><a href="<%= url_for('freqs')->to_abs %>" data-ajax="false">Frequencies</a></li>
-          <li><a href="ajax-content.html" data-ajax="false">TBD</a></li>
-        </ul>
-          </div>
-          <div id="one" class="ui-body-d ui-content">
-            <h1>First tab contents</h1>
-          </div>
+    <div role="main" class="ui-content">
+        <div data-role="tabs" id="tabs">
+            <div data-role="navbar">
+                <ul>
+                    <li><a href="#one" data-ajax="false">Leaderboard</a></li>
+                    <li><a href="<%= url_for('freqs')->to_abs %>" data-ajax="false">Frequencies</a></li>
+                    <li><a href="ajax-content.html" data-ajax="false">TBD</a></li>
+                </ul>
+            </div>
+            <div id="one" class="ui-body-d ui-content">
+                <h1>First tab contents</h1>
+            </div>
         </div>
-      </div>
+    </div>
 
     <p><a href="#freq_list">freq page</a></p>
 
@@ -402,14 +403,21 @@ __DATA__
 
 
 @@ freqs.html.ep
+<!DOCTYPE html>
 <html>
+<head>
+    <title>freqs</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.css" />
+    <script src="http://code.jquery.com/jquery-1.11.2.js"></script>
+    <script src="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.js"></script>
+</head>
 <body>
-
-    <ul data-role="listview" data-inset="true" id="freqs">
+    <ul data-role="listview" data-inset="true" id="test">
     % foreach my $freq (sort keys %$freq_list) {
     <li><a href="#"><%= sprintf('%s (%s)', $freq_list->{$freq}{designator}, $freq) %><span class="ui-li-count"><%= $freq_list->{$freq}{count} %></span></a></li>
     % }
     </ul>
 
 </body>
-<html>
+</html>
