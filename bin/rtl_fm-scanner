@@ -296,7 +296,7 @@ __DATA__
 </head>
 <body>
 <!-- Start of first page.  Keep page always running for audio.  TODO:  Clean up UI on return -->
-<div data-role="page" data-dom-cache="true" id="scan">
+<div data-role="page" data-dom-cache="false" id="scan">
 
     <div data-role="header">
     </div><!-- /header -->
@@ -318,7 +318,7 @@ __DATA__
                 <ul>
                     <li><a href="#one" data-ajax="false">Leaderboard</a></li>
                     <li><a href="<%= url_for('freqs')->to_abs %>" data-ajax="false">Frequencies</a></li>
-                    <li><a href="ajax-content.html" data-ajax="false">TBD</a></li>
+                    <li><a href="freqs_raw.html" data-ajax="false">TBD</a></li>
                 </ul>
             </div>
             <div id="one" class="ui-body-d ui-content">
@@ -331,7 +331,7 @@ __DATA__
 
     <script>
     $(document).on("pagecreate",function(){
-    
+
     var ws = new WebSocket('<%= url_for('output')->to_abs %>');
 
     var player = document.getElementById('player');
@@ -413,11 +413,13 @@ __DATA__
     <script src="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.js"></script>
 </head>
 <body>
+    <div id="two" class="ui-body-d ui-content">
     <ul data-role="listview" data-inset="true" id="test">
     % foreach my $freq (sort keys %$freq_list) {
     <li><a href="#"><%= sprintf('%s (%s)', $freq_list->{$freq}{designator}, $freq) %><span class="ui-li-count"><%= $freq_list->{$freq}{count} %></span></a></li>
     % }
     </ul>
+    </div><!-- /content -->
 
 </body>
 </html>
