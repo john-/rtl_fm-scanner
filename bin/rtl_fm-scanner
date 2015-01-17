@@ -295,7 +295,7 @@ __DATA__
     <script src="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.js"></script>
 </head>
 <body>
-<!-- Start of first page.  Keep page always running for audio.  TODO:  Clean up UI on return -->
+<!-- Start of first page. -->
 <div data-role="page" data-dom-cache="false" id="scan">
 
     <div data-role="header">
@@ -317,8 +317,7 @@ __DATA__
             <div data-role="navbar">
                 <ul>
                     <li><a href="#one" data-ajax="false">Leaderboard</a></li>
-                    <li><a href="<%= url_for('freqs')->to_abs %>" data-ajax="false">Frequencies</a></li>
-                    <li><a href="freqs_raw.html" data-ajax="false">TBD</a></li>
+                    <li><a href="<%= url_for('freqs')->to_abs %>">Frequencies</a></li>
                 </ul>
             </div>
             <div id="one" class="ui-body-d ui-content">
@@ -326,8 +325,6 @@ __DATA__
             </div>
         </div>
     </div>
-
-    <p><a href="#freq_list">freq page</a></p>
 
     <script>
     $(document).on("pagecreate",function(){
@@ -374,30 +371,6 @@ __DATA__
     <h4>Page Footer</h4>
     </div><!-- /footer -->
 </div><!-- /page -->
-
-<!-- Start of second page -->
-<div data-role="page" id="freq_list">
-
-    <div data-role="header">
-    <h1>Frequency List</h1>
-    </div><!-- /header -->
-
-    <div role="main" class="ui-content">
-
-    <ul data-role="listview" data-inset="true">
-    % foreach my $freq (sort keys %$freq_list) {
-    <li><a href="#"><%= sprintf('%s (%s)', $freq_list->{$freq}{designator}, $freq) %><span class="ui-li-count"><%= $freq_list->{$freq}{count} %></span></a></li>
-    % }
-    </ul>
-
-
-    <p><a href="#scan">Back to scan page</a></p>
-    </div><!-- /content -->
-
-    <div data-role="footer">
-    <h4>Page Footer</h4>
-    </div><!-- /footer -->
-</div><!-- /page -->
 </body>
 </html>
 
@@ -413,6 +386,7 @@ __DATA__
     <script src="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.js"></script>
 </head>
 <body>
+<div data-role="page" id="frequencies">
     <div id="two" class="ui-body-d ui-content">
     <ul data-role="listview" data-inset="true" id="test">
     % foreach my $freq (sort keys %$freq_list) {
@@ -420,6 +394,6 @@ __DATA__
     % }
     </ul>
     </div><!-- /content -->
-
+</div><!-- /page -->
 </body>
 </html>
