@@ -316,7 +316,7 @@ __DATA__
         <div data-role="tabs" id="tabs">
             <div data-role="navbar">
                 <ul>
-                     <li><a href="#one" data-ajax="false">Leaderboard</a></li>
+                     <li><a href="#lboard" data-ajax="false">Leaderboard</a></li>
                      <li><a href="#freqs" data-ajax="false">Frequencies</a></li>
                     <!-- This does work.  Probably due to: 
                          https://github.com/jquery/jquery-mobile/issues/7725
@@ -324,8 +324,8 @@ __DATA__
                      -->
                 </ul>
             </div>
-            <div id="one" class="ui-body-d ui-content">
-                <h1>First tab contents</h1>
+            <div id="lboard" class="ui-body-d ui-content">
+                <h1>Leader board content goes here</h1>
             </div>
             <div id="freqs" class="ui-body-d ui-content">
                 <h1>Frequency list not loaded.</h1>
@@ -369,8 +369,8 @@ __DATA__
 
 
     $("#tabs").on("tabsactivate", (event, ui) => {
-    if (ui.newPanel.is("#one")){
-        //first tab activated
+    if (ui.newPanel.is("#lboard")){
+        //access leaderboard url (seperate location from scanning)
     }
     else{
         $.ajax({
@@ -403,10 +403,15 @@ __DATA__
 
 
 @@ freqs.html.ep
+<!-- TODO:
+        - Show indicator for pass (manual), pass (auto), data
+        - Allow user to manually override pass or manually set it
+        - This is a static page.  Maybe make it update in real time.
+-->
 <!DOCTYPE html>
 <html>
 <body>
-    <ul data-role="listview" data-inset="true" id="test">
+    <ul data-role="listview" data-inset="false" id="freq_listview">
     % foreach my $freq (sort keys %$freq_list) {
     <li><a href="#"><%= sprintf('%s (%s)', $freq_list->{$freq}{designator}, $freq) %><span class="ui-li-count"><%= $freq_list->{$freq}{count} %></span></a></li>
     % }
