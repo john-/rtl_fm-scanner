@@ -316,12 +316,19 @@ __DATA__
         <div data-role="tabs" id="tabs">
             <div data-role="navbar">
                 <ul>
-                    <li><a href="#one" data-ajax="false">Leaderboard</a></li>
-                    <li><a href="<%= url_for('freqs')->to_abs %>">Frequencies</a></li>
+                     <li><a href="#one" data-ajax="false">Leaderboard</a></li>
+                     <li><a href="#freqs" data-ajax="false">Frequencies</a></li>
+                    <!-- This does work.  Probably due to: 
+                         https://github.com/jquery/jquery-mobile/issues/7725
+                         <li><a href="<%= url_for('freqs')->to_abs %>">Frequencies</a></li>
+                     -->
                 </ul>
             </div>
             <div id="one" class="ui-body-d ui-content">
                 <h1>First tab contents</h1>
+            </div>
+            <div id="freqs" class="ui-body-d ui-content">
+                <h1>Frequency list not loaded.</h1>
             </div>
         </div>
     </div>
@@ -361,7 +368,27 @@ __DATA__
     };
 
 
+    $("#tabs").on("tabsactivate", (event, ui) => {
+    if (ui.newPanel.is("#one")){
+        //first tab activated
+    }
+    else{
+        $.ajax({
+            url: "freqs",
+            cache: false
+        })
+           .done(function( html ) {
+               $( '#freqs' ).empty();
+               $( '#freqs' ).append( html );
+               $( '#freqs' ).trigger('create');
+           });
+        //second tab activated
+    }
+    });
+
+
     }); 
+
 
     </script>
 
@@ -378,22 +405,11 @@ __DATA__
 @@ freqs.html.ep
 <!DOCTYPE html>
 <html>
-<head>
-    <title>freqs</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.css" />
-    <script src="http://code.jquery.com/jquery-1.11.2.js"></script>
-    <script src="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.js"></script>
-</head>
 <body>
-<div data-role="page" id="frequencies">
-    <div id="two" class="ui-body-d ui-content">
     <ul data-role="listview" data-inset="true" id="test">
     % foreach my $freq (sort keys %$freq_list) {
     <li><a href="#"><%= sprintf('%s (%s)', $freq_list->{$freq}{designator}, $freq) %><span class="ui-li-count"><%= $freq_list->{$freq}{count} %></span></a></li>
     % }
     </ul>
-    </div><!-- /content -->
-</div><!-- /page -->
 </body>
 </html>
