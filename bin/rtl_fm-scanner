@@ -340,15 +340,11 @@ __DATA__
     var ws = new WebSocket('<%= url_for('output')->to_abs %>');
 
     var player = document.getElementById('player');
-    //var xmits  = document.getElementById('xmits');
     var chaninfo;
     var clips = [];
     ws.onmessage = function (event) {
         chaninfo = JSON && JSON.parse(event.data) || $.parseJSON(data);
         clips.push(chaninfo);
-        //jsonStr2 = JSON.stringify(clips);
-        //var item = '<li><a href="#">'+chaninfo.designator+'</a></li>';
-        //$('#xmits').append(item).listview('refresh');
         $('#xmit span').text(clips.length);
         if (clips.length == 1) { next_xmit() };
     };
@@ -357,12 +353,8 @@ __DATA__
         var clip = clips[0];
         console.log(clip);
         if (clip) {
-            $('#xmits').html(
-                '<li id="xmit"><a href="#">' + clip.designator + '<span class="ui-li-count">' + clips.length + '</span></a></li>'
-
-            );
-            $('#xmits').listview('refresh');
-
+            // TODO:  Why can't I update the text as easy as the queue depth number
+            $('#xmit a').html(clip.designator + '<span class="ui-li-count">' + clips.length + '</span>');
             player.src = '<%= url_for('audio')->to_abs %>?file=' + clip.file;
             player.play();
         }
@@ -370,7 +362,6 @@ __DATA__
 
     player.onended = function() {
         console.log('The audio has ended');
-        //$('#xmits li').eq(0).remove();
         clips.shift();
         $('#xmit span').text(clips.length);
         next_xmit();
@@ -386,10 +377,11 @@ __DATA__
             cache: false
         })
            .done(function( html ) {
+               // TODO:  Maybe there is some chaining way such as:
+               //        $( content ).appendTo( "#page-content" ).enhanceWithin();
                $( '#freqs' ).empty();
                $( '#freqs' ).append( html );
                $( '#freqs' ).enhanceWithin();
-               //$( '#freqs' ).trigger('create');
            });
         //second tab activated
     }
