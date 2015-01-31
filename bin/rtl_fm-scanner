@@ -301,7 +301,7 @@ __DATA__
     <div data-role="header">
     </div><!-- /header -->
 
-    <div role="main" class="ui-content">
+    <div role="main">
 
     <p>
     <audio id="player" controls>
@@ -310,9 +310,10 @@ __DATA__
     </p>
 
     <ul data-role="listview" id="xmits">
+        <li id="xmit"><a href="#">Channel information<span class="ui-li-count">0</span></a></li>
     </ul>
 
-    <div role="main" class="ui-content">
+    <div role="main">
         <div data-role="tabs" id="tabs">
             <div data-role="navbar">
                 <ul>
@@ -324,10 +325,10 @@ __DATA__
                      -->
                 </ul>
             </div>
-            <div id="lboard" class="ui-body-d ui-content">
+            <div id="lboard">
                 <h1>Leader board content goes here</h1>
             </div>
-            <div id="freqs" class="ui-body-d ui-content">
+            <div id="freqs">
                 <h1>Frequency list not loaded.</h1>
             </div>
         </div>
@@ -345,9 +346,10 @@ __DATA__
     ws.onmessage = function (event) {
         chaninfo = JSON && JSON.parse(event.data) || $.parseJSON(data);
         clips.push(chaninfo);
-        jsonStr2 = JSON.stringify(clips);
-        var item = '<li><a href="#">'+chaninfo.designator+'</a></li>';
-        $('#xmits').append(item).listview('refresh');
+        //jsonStr2 = JSON.stringify(clips);
+        //var item = '<li><a href="#">'+chaninfo.designator+'</a></li>';
+        //$('#xmits').append(item).listview('refresh');
+        $('#xmit span').text(clips.length);
         if (clips.length == 1) { next_xmit() };
     };
 
@@ -355,6 +357,12 @@ __DATA__
         var clip = clips[0];
         console.log(clip);
         if (clip) {
+            $('#xmits').html(
+                '<li id="xmit"><a href="#">' + clip.designator + '<span class="ui-li-count">' + clips.length + '</span></a></li>'
+
+            );
+            $('#xmits').listview('refresh');
+
             player.src = '<%= url_for('audio')->to_abs %>?file=' + clip.file;
             player.play();
         }
@@ -362,11 +370,11 @@ __DATA__
 
     player.onended = function() {
         console.log('The audio has ended');
-        $('#xmits li').eq(0).remove();
+        //$('#xmits li').eq(0).remove();
         clips.shift();
+        $('#xmit span').text(clips.length);
         next_xmit();
     };
-
 
     $("#tabs").on("tabsactivate", (event, ui) => {
     if (ui.newPanel.is("#lboard")){
@@ -380,7 +388,8 @@ __DATA__
            .done(function( html ) {
                $( '#freqs' ).empty();
                $( '#freqs' ).append( html );
-               $( '#freqs' ).trigger('create');
+               $( '#freqs' ).enhanceWithin();
+               //$( '#freqs' ).trigger('create');
            });
         //second tab activated
     }
