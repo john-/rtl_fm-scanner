@@ -15,6 +15,7 @@ use constant DESIGNATOR => 1;
 use constant PASS       => 7;
 
 app->plugin('RenderFile');
+app->plugin('CORS');
 
 app->secrets( ['Specfying a secret to make the reminder go away.'] );
 
@@ -210,6 +211,16 @@ app->start_rtlfm;
 
 get '/' => { template => 'index' };
 
+get '/main' => { template => 'main' };  # is ajax issue with external main is cross domain problem?
+
+get '/self' => sub {
+    my $c    = shift;
+
+    $c->render(json => { function => 'Scanner' } );
+};
+
+get '/script' => { template => 'script' };  # is ajax issue with external main is cross domain problem?
+
 get '/audio' => sub {
     my $c    = shift;
     my $file = $c->param('file');
@@ -337,6 +348,8 @@ __DATA__
     <script>
     $(document).on("pagecreate",function(){
 
+    warn('THIS PAGE IS DEPRECATED');
+
     var ws = new WebSocket('<%= url_for('output')->to_abs %>');
 
     var player = document.getElementById('player');
@@ -417,5 +430,126 @@ __DATA__
     <li><a href="#"><%= sprintf('%s (%s)', $freq_list->{$freq}{designator}, $freq) %><span class="ui-li-count"><%= $freq_list->{$freq}{count} %></span></a></li>
     % }
     </ul>
+</body>
+</html>
+
+@@ script.html.ep
+console.log("Scanner code running");
+
+var scan_ws = new WebSocket('<%= url_for('output')->to_abs %>');
+
+scan_ws.onmessage = function (event) {
+    enqueue(JSON && JSON.parse(event.data) || $.parseJSON(data));
+};
+
+
+@@ main.html.ep
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cartinator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.css" />
+    <script src="http://code.jquery.com/jquery-1.11.2.js"></script>
+    <script src="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.js"></script>
+</head>
+<body>
+<div data-role="page" data-dom-cache="false" id="main">
+    <div data-role="content">
+
+        <p>
+            <audio id="player" controls>
+            Your browser does not support the audio element.
+            </audio>
+        </p>
+
+        <ul data-role="listview">
+            <li id="notice"><a href="#">Notification area<span class="ui-li-count">0</span></a></li>
+        </ul>
+
+<!--
+        <div data-role="navbar" id="selector">
+            <ul>
+                <li id="no-plugin"><a href="#" data-ajax="false">No plugins loaded</a></li>
+                <li id="dsdsd"><a href="#" data-ajax="false">Page 2</a></li>
+            </ul>
+        </div>
+-->
+        <script>
+            var plugins = [
+	        { "url" : "http://localhost:3000" },
+	        { "url" : "http://localhost:3001" }
+	    ];
+
+
+	    function loadPlugins () {
+
+	        // TODO: get plugin name and other info from service.
+
+	        var output = [];
+	        plugins.forEach( function(key, index) {
+
+                    // load info about the service and use it to set navbar
+	            $.getJSON( key.url + "/self" )
+                        .done(function( json ) {
+                            output.push('<li><a href="#" data-ajax="false">' + json.function + '</a></li>');
+                            $('#selector').remove();
+                            $('#main').append('<div data-role="navbar" id="selector"><ul>' + output.join('') + '</ul></div>');
+                            $('#selector').navbar();
+                            console.log( "loading plugin: " + json.function );
+                    })
+                        .fail(function( jqxhr, textStatus, error ) {
+                            var err = textStatus + ", " + error;
+                            console.log( "Could not load plugin: " + key.url + " Request Failed: " + textStatus );
+                    });
+
+                    // load script needed by the service
+	            $.getScript( key.url + "/script" )
+                        .done(function( script, textStatus ) {
+                            console.log( key.url + " script status: " + textStatus );
+                    })
+                        .fail(function( jqxhr, settings, error ) {
+                            console.log("Triggered ajaxError handler: " + key.url + " error: " + error);
+                    });
+
+
+	        });
+	    };
+
+            var player = document.getElementById('player');
+            var clips = [];
+
+            function enqueue (chaninfo) {
+                clips.push(chaninfo);
+                $('#notice span').text(clips.length);
+                if (clips.length == 1) { next_xmit() };
+            };
+
+	    next_xmit = function() {
+	        var clip = clips[0];
+	        console.log(clip);
+	        if (clip) {
+	            // TODO:  Why can't I update the text as easy as the queue depth number
+		    $('#notice a').html(clip.designator + '<span class="ui-li-count">' + clips.length + '</span>');
+		    player.src = '<%= url_for('audio')->to_abs %>?file=' + clip.file;
+		    player.play();
+		}
+            }
+
+	    player.onended = function() {
+	        console.log('The audio has ended');
+	        clips.shift();
+	        $('#notice span').text(clips.length);
+	        next_xmit();
+	    };
+
+            $(document).on("pagecreate",function(){
+
+	        loadPlugins();
+
+	    });
+        </script>
+    </div><!-- /content -->
+</div><!-- /page -->
 </body>
 </html>
