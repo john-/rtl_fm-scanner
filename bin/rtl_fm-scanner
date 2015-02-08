@@ -467,14 +467,24 @@ scan_ws.onmessage = function (event) {
             <li id="notice"><a href="#">Notification area<span class="ui-li-count">0</span></a></li>
         </ul>
 
+        <div data-role="tabs" id="switcher">
+        </div>
+
 <!--
-        <div data-role="navbar" id="selector">
+        <div data-role="tabs" id="switcher">
+        <div data-role="navbar" id="blah">
             <ul>
-                <li id="no-plugin"><a href="#" data-ajax="false">No plugins loaded</a></li>
-                <li id="dsdsd"><a href="#" data-ajax="false">Page 2</a></li>
+                <li><a href="#Leaderboard" data-ajax="false">No plugins loaded</a></li>
+                <li><a href="#freqs" data-ajax="false">Page 2</a></li>
             </ul>
         </div>
+            <div id="Leaderboard">
+            </div>
+            <div id="freqs">
+            </div>
+        </div>
 -->
+
         <script>
             var plugins = [
 	        { "url" : "http://localhost:3000" },
@@ -487,15 +497,22 @@ scan_ws.onmessage = function (event) {
 	        // TODO: get plugin name and other info from service.
 
 	        var output = [];
+                //var plugs_on = [];
 	        plugins.forEach( function(key, index) {
 
                     // load info about the service and use it to set navbar
 	            $.getJSON( key.url + "/self" )
                         .done(function( json ) {
-                            output.push('<li><a href="#" data-ajax="false">' + json.function + '</a></li>');
-                            $('#selector').remove();
-                            $('#main').append('<div data-role="navbar" id="selector"><ul>' + output.join('') + '</ul></div>');
-                            $('#selector').navbar();
+                            //plugs_on.push(json.function.toLowerCase());
+                            output.push('<li><a href=#' + json.function.toLowerCase() + ' data-ajax="false">' + json.function + '</a></li>');
+                            $('#options').remove();
+                            $('#switcher').append('<div data-role="navbar" id="options"><ul>' + output.join('') + '</ul></div>');
+
+                            //$( "#switcher" ).tabs({
+                            //    activate: function( event, ui ) { console.log("hey hey hey")}
+                            //});
+
+                            $('#options').navbar();
                             console.log( "loading plugin: " + json.function );
                     })
                         .fail(function( jqxhr, textStatus, error ) {
@@ -546,6 +563,19 @@ scan_ws.onmessage = function (event) {
             $(document).on("pagecreate",function(){
 
 	        loadPlugins();
+
+                $("#switcher").on("tabsactivate", (event, ui) => {
+
+                    if (ui.newPanel.is("#Leaderboard")){
+                        console.log("leaderboard page selected");
+                    } else {
+
+                        console.log("other page selected");
+
+                    }
+                });
+
+
 
 	    });
         </script>
