@@ -444,22 +444,15 @@ scan_ws.onmessage = function (event) {
 
 scanner_page = function () {
 
-    console.log("Executing scanner function");
+    console.log("Populating scanner page");
 
     $.ajax({
         url: "freqs",
         cache: false
     })
        .done(function( html ) {
-           // TODO:  Maybe there is some chaining way such as:
-           //        $( content ).appendTo( "#page-content" ).enhanceWithin();
            $( '#scanner' ).empty().append(html).enhanceWithin();
-           //$( '#scanner' ).empty();
-           //$( '#scanner' ).append( html );
-           //$( '#scanner' ).enhanceWithin();
        });
-
-
 };
 
 
@@ -475,160 +468,135 @@ scanner_page = function () {
 </head>
 <body>
 <div data-role="page" data-dom-cache="false" id="main">
-    <div data-role="content">
+    <p>
+	<audio id="player" controls>
+	Your browser does not support the audio element.
+	</audio>
+    </p>
 
-        <p>
-            <audio id="player" controls>
-            Your browser does not support the audio element.
-            </audio>
-        </p>
+    <ul data-role="listview">
+	<li id="notice"><a href="#">Notification area<span class="ui-li-count">0</span></a></li>
+    </ul>
 
-        <ul data-role="listview">
-            <li id="notice"><a href="#">Notification area<span class="ui-li-count">0</span></a></li>
-        </ul>
+    <div data-role="tabs" id="switcher">
+    </div>
 
-        <p></p>
-
-<--        <div data-role="tabs" id="switcher">
-        </div>
--->
-<!--
-        <div data-role="tabs" id="switcher">
-            <div data-role="navbar" id="blah">
-                <ul>
-                    <li><a href="#leaderboard" data-ajax="false">No plugins loaded</a></li>
-                    <li><a href="#freqs" data-ajax="false">Page 2</a></li>
-                </ul>
-            </div>
-            <div id="leaderboard">
-            </div>
-            <div id="freqs">
-            </div>
-        </div>
--->
-
-    </div><!-- /content -->
+    <!--
+    <div data-role="tabs" id="switcher">
+	<div data-role="navbar" id="blah">
+	    <ul>
+		<li><a href="#leaderboard" data-ajax="false">No plugins loaded</a></li>
+		<li><a href="#freqs" data-ajax="false">Page 2</a></li>
+	    </ul>
+	</div>
+	<div id="leaderboard">
+	</div>
+	<div id="freqs">
+	</div>
+    </div>
+    -->
 </div><!-- /page -->
 
-        <script>
-            var plugins = [
-	        { "url" : "http://localhost:3000" },
-	        { "url" : "http://localhost:3001" }
-	    ];
+<script>
+    var plugins = [
+	{ "url" : "http://172.16.1.15:3000" },
+	{ "url" : "http://172.16.1.15:3001" }
+    ];
+
+    function loadPlugins () {
+
+	var plugs_on = [];
+	plugins.forEach( function(key, index) {
+
+	    // load info about the service and use it to set navbar
+	    $.getJSON( key.url + "/self" )
+		.done(function( json ) {
+		    plugs_on.push(json.function);
+
+		    $('#switcher').empty();
+		    //$('#main').append('<div data-role="tabs" id="switcher" /div>');
+
+		    $('#switcher').append('<div data-role="navbar" id="options"><ul></ul></div>');
+
+		    plugs_on.forEach( function(plug) {
+			$('<li/>')
+			    .append(
+				$('<a/>', {
+				    text: plug,
+				    href: "#" + plug.toLowerCase()
+				})
+				).appendTo("#options ul");
+		    });
+
+		    plugs_on.forEach( function(plug) {
+			$('<div/>', {
+			    id: plug.toLowerCase()
+			}).appendTo("#switcher");
+
+		    });
+
+		    $( "#switcher" ).tabs( "refresh" );
+
+		    $( "#switcher" ).tabs({
+			activate: function( event, ui ) { 
+			    var func = ui.newPanel.attr('id') + '_page';
+			    window[func]();
+		    }    });
 
 
-	    function loadPlugins () {
-
-	        // TODO: get plugin name and other info from service.
-
-	        //var output = [];
-                var plugs_on = [];
-	        plugins.forEach( function(key, index) {
-
-                    // load info about the service and use it to set navbar
-	            $.getJSON( key.url + "/self" )
-                        .done(function( json ) {
-                            plugs_on.push(json.function);
-
-                            //output.push('<li><a href=#' + json.function.toLowerCase() + ' data-ajax="false">' + json.function + '</a></li>');
-                            $('#switcher').empty();
-
-                            $('#switcher').append('<div data-role="navbar" id="options"><ul></ul></div>');
-                            //$('#switcher').append('<div data-role="navbar" id="options"><ul>' + output.join('') + '</ul></div>');
-
-                            plugs_on.forEach( function(plug) {
-                                console.log("add this to plugins: " + plug);
-                                $('<li/>')
-                                    .append(
-                                        $('<a/>', {
-                                            text: plug,
-                                            href: "#" + plug.toLowerCase()
-                                        })
-                                        ).appendTo("#options ul");
-                            });
-
-                            plugs_on.forEach( function(plug) {
-                                $('<div/>', {
-                                    id: plug.toLowerCase()
-                                }).appendTo("#switcher");
-
-                            });
-
-                            $( "#switcher" ).tabs( "refresh" );
-
-                            $( "#switcher" ).tabs({
-                                activate: function( event, ui ) { 
-                                    var func = ui.newPanel.attr('id') + '_page';
-                                    window[func]();
-                            }    });
-                            
-
-                            $('#options').navbar();
-                            console.log( "loading plugin: " + json.function );
-                    })
-                        .fail(function( jqxhr, textStatus, error ) {
-                            var err = textStatus + ", " + error;
-                            console.log( "Could not load plugin: " + key.url + " Request Failed: " + textStatus );
-                    });
-
-                    // load script needed by the service
-	            $.getScript( key.url + "/script" )
-                        .done(function( script, textStatus ) {
-                            console.log( key.url + " script status: " + textStatus );
-                    })
-                        .fail(function( jqxhr, settings, error ) {
-                            console.log("Triggered ajaxError handler: " + key.url + " error: " + error);
-                    });
-
-
-	        });
-	    };
-
-            var player = document.getElementById('player');
-            var clips = [];
-
-            function enqueue (chaninfo) {
-                clips.push(chaninfo);
-                $('#notice span').text(clips.length);
-                if (clips.length == 1) { next_xmit() };
-            };
-
-	    next_xmit = function() {
-	        var clip = clips[0];
-	        console.log(clip);
-	        if (clip) {
-	            // TODO:  Why can't I update the text as easy as the queue depth number
-		    $('#notice a').html(clip.designator + '<span class="ui-li-count">' + clips.length + '</span>');
-		    player.src = '<%= url_for('audio')->to_abs %>?file=' + clip.file;
-		    player.play();
-		}
-            }
-
-	    player.onended = function() {
-	        console.log('The audio has ended');
- 	        clips.shift();
-	        $('#notice span').text(clips.length);
-	        next_xmit();
-	    };
-
-            $(document).on("pagecreate",function(){
-
-	        loadPlugins();
-
-                //$("#switcher").on("tabsactivate", (event, ui) => {
-
-                //    if (ui.newPanel.is("#leaderboard")){
-                //        console.log("leaderboard page selected");
-                //    } else {
-
-                //        console.log("other page selected");
-
-                //    }
-                //});
-
-
-
+		    $('#options').navbar();
+		    console.log( "loading plugin: " + json.function );
+	    })
+		.fail(function( jqxhr, textStatus, error ) {
+		    var err = textStatus + ", " + error;
+		    console.log( "Could not load plugin: " + key.url + " Request Failed: " + textStatus );
 	    });
-        </script>
+
+	    // load script needed by the service
+	    $.getScript( key.url + "/script" )
+		.done(function( script, textStatus ) {
+	    })
+		.fail(function( jqxhr, settings, error ) {
+		    console.log("Triggered ajaxError handler: " + key.url + " error: " + error);
+	    });
+
+
+	});
+    };
+
+    var player = document.getElementById('player');
+    var clips = [];
+
+    function enqueue (chaninfo) {
+	clips.push(chaninfo);
+	$('#notice span').text(clips.length);
+	if (clips.length == 1) { next_xmit() };
+    };
+
+    next_xmit = function() {
+	var clip = clips[0];
+	console.log(clip);
+	if (clip) {
+	    // TODO:  Why can't I update the text as easy as the queue depth number
+	    $('#notice a').html(clip.designator + '<span class="ui-li-count">' + clips.length + '</span>');
+	    player.src = '<%= url_for('audio')->to_abs %>?file=' + clip.file;
+	    player.play();
+	}
+    }
+
+    player.onended = function() {
+	console.log('The audio has ended');
+	clips.shift();
+	$('#notice span').text(clips.length);
+	next_xmit();
+    };
+
+    $(document).on("pagecreate",function(){
+
+	loadPlugins();
+
+    });
+
+</script>
 </body>
 </html>
