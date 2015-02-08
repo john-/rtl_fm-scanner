@@ -442,6 +442,26 @@ scan_ws.onmessage = function (event) {
     enqueue(JSON && JSON.parse(event.data) || $.parseJSON(data));
 };
 
+scanner_page = function () {
+
+    console.log("Executing scanner function");
+
+    $.ajax({
+        url: "freqs",
+        cache: false
+    })
+       .done(function( html ) {
+           // TODO:  Maybe there is some chaining way such as:
+           //        $( content ).appendTo( "#page-content" ).enhanceWithin();
+           $( '#scanner' ).empty().append(html).enhanceWithin();
+           //$( '#scanner' ).empty();
+           //$( '#scanner' ).append( html );
+           //$( '#scanner' ).enhanceWithin();
+       });
+
+
+};
+
 
 @@ main.html.ep
 <!DOCTYPE html>
@@ -467,23 +487,28 @@ scan_ws.onmessage = function (event) {
             <li id="notice"><a href="#">Notification area<span class="ui-li-count">0</span></a></li>
         </ul>
 
-        <div data-role="tabs" id="switcher">
-        </div>
+        <p></p>
 
+<--        <div data-role="tabs" id="switcher">
+        </div>
+-->
 <!--
         <div data-role="tabs" id="switcher">
-        <div data-role="navbar" id="blah">
-            <ul>
-                <li><a href="#Leaderboard" data-ajax="false">No plugins loaded</a></li>
-                <li><a href="#freqs" data-ajax="false">Page 2</a></li>
-            </ul>
-        </div>
-            <div id="Leaderboard">
+            <div data-role="navbar" id="blah">
+                <ul>
+                    <li><a href="#leaderboard" data-ajax="false">No plugins loaded</a></li>
+                    <li><a href="#freqs" data-ajax="false">Page 2</a></li>
+                </ul>
+            </div>
+            <div id="leaderboard">
             </div>
             <div id="freqs">
             </div>
         </div>
 -->
+
+    </div><!-- /content -->
+</div><!-- /page -->
 
         <script>
             var plugins = [
@@ -496,21 +521,47 @@ scan_ws.onmessage = function (event) {
 
 	        // TODO: get plugin name and other info from service.
 
-	        var output = [];
-                //var plugs_on = [];
+	        //var output = [];
+                var plugs_on = [];
 	        plugins.forEach( function(key, index) {
 
                     // load info about the service and use it to set navbar
 	            $.getJSON( key.url + "/self" )
                         .done(function( json ) {
-                            //plugs_on.push(json.function.toLowerCase());
-                            output.push('<li><a href=#' + json.function.toLowerCase() + ' data-ajax="false">' + json.function + '</a></li>');
-                            $('#options').remove();
-                            $('#switcher').append('<div data-role="navbar" id="options"><ul>' + output.join('') + '</ul></div>');
+                            plugs_on.push(json.function);
 
-                            //$( "#switcher" ).tabs({
-                            //    activate: function( event, ui ) { console.log("hey hey hey")}
-                            //});
+                            //output.push('<li><a href=#' + json.function.toLowerCase() + ' data-ajax="false">' + json.function + '</a></li>');
+                            $('#switcher').empty();
+
+                            $('#switcher').append('<div data-role="navbar" id="options"><ul></ul></div>');
+                            //$('#switcher').append('<div data-role="navbar" id="options"><ul>' + output.join('') + '</ul></div>');
+
+                            plugs_on.forEach( function(plug) {
+                                console.log("add this to plugins: " + plug);
+                                $('<li/>')
+                                    .append(
+                                        $('<a/>', {
+                                            text: plug,
+                                            href: "#" + plug.toLowerCase()
+                                        })
+                                        ).appendTo("#options ul");
+                            });
+
+                            plugs_on.forEach( function(plug) {
+                                $('<div/>', {
+                                    id: plug.toLowerCase()
+                                }).appendTo("#switcher");
+
+                            });
+
+                            $( "#switcher" ).tabs( "refresh" );
+
+                            $( "#switcher" ).tabs({
+                                activate: function( event, ui ) { 
+                                    var func = ui.newPanel.attr('id') + '_page';
+                                    window[func]();
+                            }    });
+                            
 
                             $('#options').navbar();
                             console.log( "loading plugin: " + json.function );
@@ -555,7 +606,7 @@ scan_ws.onmessage = function (event) {
 
 	    player.onended = function() {
 	        console.log('The audio has ended');
-	        clips.shift();
+ 	        clips.shift();
 	        $('#notice span').text(clips.length);
 	        next_xmit();
 	    };
@@ -564,22 +615,20 @@ scan_ws.onmessage = function (event) {
 
 	        loadPlugins();
 
-                $("#switcher").on("tabsactivate", (event, ui) => {
+                //$("#switcher").on("tabsactivate", (event, ui) => {
 
-                    if (ui.newPanel.is("#Leaderboard")){
-                        console.log("leaderboard page selected");
-                    } else {
+                //    if (ui.newPanel.is("#leaderboard")){
+                //        console.log("leaderboard page selected");
+                //    } else {
 
-                        console.log("other page selected");
+                //        console.log("other page selected");
 
-                    }
-                });
+                //    }
+                //});
 
 
 
 	    });
         </script>
-    </div><!-- /content -->
-</div><!-- /page -->
 </body>
 </html>
