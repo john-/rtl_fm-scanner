@@ -15,7 +15,7 @@ use constant DESIGNATOR => 1;
 use constant PASS       => 7;
 
 app->plugin('RenderFile');
-app->plugin('CORS');
+app->plugin('CORS');        # lets the client get around same origin policy restriction
 
 app->secrets( ['Specfying a secret to make the reminder go away.'] );
 
@@ -24,6 +24,90 @@ my $dbname = '../data/freqs.db';
 my $trans_id = 0;
 my $xmit_timer;    # stores the id of the loop that limits length of xmit
 app->defaults( state => () );
+
+get '/' => { template => 'index' };
+
+get '/main' => { template => 'main' };
+
+get '/self' => sub {
+    my $c    = shift;
+
+    $c->render(json => { function => 'Scanner' } );
+};
+
+get '/script' => { template => 'script' };
+
+get '/audio' => sub {
+    my $c    = shift;
+    my $file = $c->param('file');
+
+    # Open file in browser(do not show save dialog)
+    $c->render_file(
+        'filepath' => "../archive/$file",
+
+#'format'   => 'pdf',                 # will change Content-Type "application/x-download" to "application/pdf"
+        'content_disposition' => 'inline'
+        ,    # will change Content-Disposition from "attachment" to "inline"
+    );
+};
+
+get '/freqs' => { template => 'freqs' };
+
+websocket '/output' => sub {
+    my $c = shift;
+
+    $c->inactivity_timeout(60);
+
+# There must be a better way of addressing this.  Requirements are that there is a long running
+# process started when aplication starts (see above).  This process needs to exist independently
+# of client conntections.  I could not figure out a way for this client specifc code to wait for
+# a change in the output from the long running process.  Therefore, it is checking if a global
+# that contains current state of that process differs from what was sent to client previously.
+# If it does differ it is sent to client.  Otherwise it is ignored.
+# In this application there will be at most 2 clients connecting.
+    my $trans_ref = 0;
+    my $id        = Mojo::IOLoop->recurring(
+        0.25 => sub {
+            my $loop = shift;
+
+            if ( $trans_ref == $trans_id ) { return }
+
+            my %details = %{ app->defaults('state') };
+
+	    $details{url} = $c->url_for('audio')->to_abs;  # doesn't work in the helper
+
+            $c = $c->send( { json => \%details } );
+            app->log->info(
+                sprintf( 'let client know about %s', $details{url} ) );
+            $trans_ref = $trans_id;
+        }
+    );
+
+    $c->on(
+        json => sub {
+            my ( $ws, $hash ) = @_;
+
+            if ( $hash->{type} eq 'pass' ) {
+                app->log->info(
+                    sprintf( 'Request to put a pass on %s', $hash->{freq} ) );
+
+# TODO:  Update db for this freq and then reload rtl_fm with refreshed list of freqs
+                app->update_pass( $hash->{freq}, $hash->{designator} );
+                $c->start_rtlfm;
+            }
+
+            #app->log->debug("Message: ".dumper($hash));
+        }
+    );
+
+    $c->on(
+        finish => sub {
+            my ( $c, $code, $reason ) = @_;
+            Mojo::IOLoop->remove($id);
+            $c->app->log->debug("WebSocket closed with status $code.");
+        }
+    );
+};
 
 helper connector => sub {
     state $db = DBIx::Connector->new( "dbi:SQLite:$dbname", "", "" )
@@ -65,8 +149,10 @@ helper set_state => sub {
         my $freq_list  = app->defaults('freq_list');
         my $designator = $freq_list->{$freq}{designator};
         $detail = {
+	    type       => 'audio',
             freq       => $freq,
             file       => $file,
+	    #url        => $c->url_for('script')->to_abs,
             trans_id   => $trans_id,
             start      => time(),
             designator => $designator,
@@ -209,87 +295,6 @@ helper start_rtlfm => sub {
 
 app->start_rtlfm;
 
-get '/' => { template => 'index' };
-
-get '/main' => { template => 'main' };  # is ajax issue with external main is cross domain problem?
-
-get '/self' => sub {
-    my $c    = shift;
-
-    $c->render(json => { function => 'Scanner' } );
-};
-
-get '/script' => { template => 'script' };  # is ajax issue with external main is cross domain problem?
-
-get '/audio' => sub {
-    my $c    = shift;
-    my $file = $c->param('file');
-
-    # Open file in browser(do not show save dialog)
-    $c->render_file(
-        'filepath' => "../archive/$file",
-
-#'format'   => 'pdf',                 # will change Content-Type "application/x-download" to "application/pdf"
-        'content_disposition' => 'inline'
-        ,    # will change Content-Disposition from "attachment" to "inline"
-    );
-};
-
-get '/freqs' => { template => 'freqs' };
-
-websocket '/output' => sub {
-    my $c = shift;
-
-    $c->inactivity_timeout(60);
-
-# There must be a better way of addressing this.  Requirements are that there is a long running
-# process started when aplication starts (see above).  This process needs to exist independently
-# of client conntections.  I could not figure out a way for this client specifc code to wait for
-# a change in the output from the long running process.  Therefore, it is checking if a global
-# that contains current state of that process differs from what was sent to client previously.
-# If it does differ it is sent to client.  Otherwise it is ignored.
-# In this application there will be at most 2 clients connecting.
-    my $trans_ref = 0;
-    my $id        = Mojo::IOLoop->recurring(
-        0.25 => sub {
-            my $loop = shift;
-
-            if ( $trans_ref == $trans_id ) { return }
-
-            my %details = %{ app->defaults('state') };
-
-            $c = $c->send( { json => \%details } );
-            app->log->info(
-                sprintf( 'let client know about %s', $details{file} ) );
-            $trans_ref = $trans_id;
-        }
-    );
-
-    $c->on(
-        json => sub {
-            my ( $ws, $hash ) = @_;
-
-            if ( $hash->{type} eq 'pass' ) {
-                app->log->info(
-                    sprintf( 'Request to put a pass on %s', $hash->{freq} ) );
-
-# TODO:  Update db for this freq and then reload rtl_fm with refreshed list of freqs
-                app->update_pass( $hash->{freq}, $hash->{designator} );
-                $c->start_rtlfm;
-            }
-
-            #app->log->debug("Message: ".dumper($hash));
-        }
-    );
-
-    $c->on(
-        finish => sub {
-            my ( $c, $code, $reason ) = @_;
-            Mojo::IOLoop->remove($id);
-            $c->app->log->debug("WebSocket closed with status $code.");
-        }
-    );
-};
 
 app->start;
 
@@ -439,7 +444,11 @@ console.log("Scanner code running");
 var scan_ws = new WebSocket('<%= url_for('output')->to_abs %>');
 
 scan_ws.onmessage = function (event) {
-    enqueue(JSON && JSON.parse(event.data) || $.parseJSON(data));
+    var msg = JSON && JSON.parse(event.data) || $.parseJSON(data);
+
+    if (msg.type == 'audio') {
+        enqueue(msg);
+    }
 };
 
 scanner_page = function () {
@@ -447,7 +456,7 @@ scanner_page = function () {
     console.log("Populating scanner page");
 
     $.ajax({
-        url: "freqs",
+        url: '<%= url_for('freqs')->to_abs %>',
         cache: false
     })
        .done(function( html ) {
