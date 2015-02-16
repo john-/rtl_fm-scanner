@@ -25,8 +25,6 @@ my $trans_id = 0;
 my $xmit_timer;    # stores the id of the loop that limits length of xmit
 app->defaults( state => () );
 
-get '/' => { template => 'index' };
-
 get '/main' => { template => 'main' };
 
 get '/self' => sub {
@@ -44,10 +42,7 @@ get '/audio' => sub {
     # Open file in browser(do not show save dialog)
     $c->render_file(
         'filepath' => "../archive/$file",
-
-#'format'   => 'pdf',                 # will change Content-Type "application/x-download" to "application/pdf"
         'content_disposition' => 'inline'
-        ,    # will change Content-Disposition from "attachment" to "inline"
     );
 };
 
@@ -78,7 +73,7 @@ websocket '/output' => sub {
 
             $c = $c->send( { json => \%details } );
             app->log->info(
-                sprintf( 'let client know about %s', $details{url} ) );
+               sprintf( 'let client know about %s', $details{url} ) );
             $trans_ref = $trans_id;
         }
     );
@@ -300,127 +295,6 @@ app->start;
 
 __DATA__
 
-@@ index.html.ep
-<!DOCTYPE html>
-<html>
-<head>
-    <title>rtl_fm-scanner</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.css" />
-    <script src="http://code.jquery.com/jquery-1.11.2.js"></script>
-    <script src="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.js"></script>
-</head>
-<body>
-<!-- Start of first page. -->
-<div data-role="page" data-dom-cache="false" id="scan">
-
-    <div data-role="header">
-    </div><!-- /header -->
-
-    <div role="main">
-
-    <p>
-    <audio id="player" controls>
-    Your browser does not support the audio element.
-    </audio>
-    </p>
-
-    <ul data-role="listview" id="xmits">
-        <li id="xmit"><a href="#">Channel information<span class="ui-li-count">0</span></a></li>
-    </ul>
-
-    <div role="main">
-        <div data-role="tabs" id="tabs">
-            <div data-role="navbar">
-                <ul>
-                     <li><a href="#lboard" data-ajax="false">Leaderboard</a></li>
-                     <li><a href="#freqs" data-ajax="false">Frequencies</a></li>
-                    <!-- This does work.  Probably due to: 
-                         https://github.com/jquery/jquery-mobile/issues/7725
-                         <li><a href="<%= url_for('freqs')->to_abs %>">Frequencies</a></li>
-                     -->
-                </ul>
-            </div>
-            <div id="lboard">
-                <h1>Leader board content goes here</h1>
-            </div>
-            <div id="freqs">
-                <h1>Frequency list not loaded.</h1>
-            </div>
-        </div>
-    </div>
-
-    <script>
-    $(document).on("pagecreate",function(){
-
-    warn('THIS PAGE IS DEPRECATED');
-
-    var ws = new WebSocket('<%= url_for('output')->to_abs %>');
-
-    var player = document.getElementById('player');
-    var chaninfo;
-    var clips = [];
-    ws.onmessage = function (event) {
-        chaninfo = JSON && JSON.parse(event.data) || $.parseJSON(data);
-        clips.push(chaninfo);
-        $('#xmit span').text(clips.length);
-        if (clips.length == 1) { next_xmit() };
-    };
-
-    next_xmit = function() {
-        var clip = clips[0];
-        console.log(clip);
-        if (clip) {
-            // TODO:  Why can't I update the text as easy as the queue depth number
-            $('#xmit a').html(clip.designator + '<span class="ui-li-count">' + clips.length + '</span>');
-            player.src = '<%= url_for('audio')->to_abs %>?file=' + clip.file;
-            player.play();
-        }
-    }
-
-    player.onended = function() {
-        console.log('The audio has ended');
-        clips.shift();
-        $('#xmit span').text(clips.length);
-        next_xmit();
-    };
-
-    $("#tabs").on("tabsactivate", (event, ui) => {
-    if (ui.newPanel.is("#lboard")){
-        //access leaderboard url (seperate location from scanning)
-    }
-    else{
-        $.ajax({
-            url: "freqs",
-            cache: false
-        })
-           .done(function( html ) {
-               // TODO:  Maybe there is some chaining way such as:
-               //        $( content ).appendTo( "#page-content" ).enhanceWithin();
-               $( '#freqs' ).empty();
-               $( '#freqs' ).append( html );
-               $( '#freqs' ).enhanceWithin();
-           });
-        //second tab activated
-    }
-    });
-
-
-    }); 
-
-
-    </script>
-
-    </div><!-- /content -->
-
-    <div data-role="footer">
-    <h4>Page Footer</h4>
-    </div><!-- /footer -->
-</div><!-- /page -->
-</body>
-</html>
-
-
 @@ freqs.html.ep
 <!-- TODO:
         - Show indicator for pass (manual), pass (auto), data
@@ -463,7 +337,6 @@ scanner_page = function () {
            $( '#scanner' ).empty().append(html).enhanceWithin();
        });
 };
-
 
 @@ main.html.ep
 <!DOCTYPE html>
