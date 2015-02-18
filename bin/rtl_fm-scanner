@@ -14,6 +14,8 @@ use constant FREQ       => 0;
 use constant DESIGNATOR => 1;
 use constant PASS       => 7;
 
+my $config = plugin Config => {file => '../config/scanner.conf'};
+
 app->plugin('RenderFile');
 app->plugin('CORS');        # lets the client get around same origin policy restriction
 
@@ -87,7 +89,10 @@ websocket '/output' => sub {
 # TODO:  Update db for this freq and then reload rtl_fm with refreshed list of freqs
                 app->update_pass( $hash->{freq}, $hash->{designator} );
                 $c->start_rtlfm;
-            }
+            } elsif ( $hash->{type} eq 'squelch' ) {
+		$config->{squelch} = $hash->{squelch};
+                $c->start_rtlfm;   # need to start rtl_fm for changes to take effect
+	    }
 
             #app->log->debug("Message: ".dumper($hash));
         }
@@ -219,10 +224,9 @@ helper start_rtlfm => sub {
     #app->log->debug(dumper(app->defaults->{freq_list}));
 
     my $cmd =
-"/usr/local/bin/rtl_fm -M fm -p 34 @freq_args -s 12k -l 80 -g 49.2 -E wav -n ../archive /tmp/ignored.out";
+"/usr/local/bin/rtl_fm -M fm -p 34 @freq_args -s 12k -l $config->{squelch} -g 49.2 -E wav -n ../archive /tmp/ignored.out";
 
 #app->log->info('You must read audio from fifo: aplay -f S16_LE -r 12000 /tmp/rtlfm_audio.wav');
-
     my $rtlfm_fifo;
     my $rtlfm_pid = open( $rtlfm_fifo, "$cmd 2>&1 |" ) or do {
 
@@ -336,3 +340,62 @@ scanner_page = function () {
        });
 };
 
+scanner_config = function() {
+
+    // approach from: http://stackoverflow.com/questions/16015810/jquery-mobile-best-way-to-create-pop-up-and-content-dynamically
+
+    var $config = $("<div/>").popup({
+        theme : "a",
+        overlyaTheme : "a",
+        transition : "pop"
+    }).on("popupafterclose", function() {
+        //remove the popup when closing
+        $(this).remove();
+    });
+
+    $("<h2/>", {
+        text : "Scanner Configuration"
+    }).appendTo($config);
+
+    //<label for="slider-1">Input slider:</label>
+    //<input type="range" name="slider-1" id="slider-1" value="60" min="0" max="100" />
+
+    //create a form for the pop up
+    $('<form>').append(
+        $('<label>', {
+            for: 'squelch',
+            text: 'Squelch'
+    }))
+    .append($('<input/>', {
+        type : 'range',
+        name : 'squelch',
+        id : 'squelch',
+        value : '60',
+        min : '0',
+        max : '100'
+    })).appendTo($config);
+
+   //Create a submit button(fake)
+    $("<a>", {
+        text : "OK"
+    }).buttonMarkup({
+        inline : true,
+        icon : "check"
+    }).bind("click", function() {
+        $config.popup("close");
+        console.log( 'squelch: ' + $('#squelch').val() );
+        //that.subscribeToAsset(callback);
+    }).appendTo($config);
+
+    //create a back button
+    $("<a>", {
+        text : "Cancel",
+    }).buttonMarkup({
+        inline : true,
+        icon : "back"
+    }).bind('click', function() {
+        $config.popup('close');
+    }).appendTo($config);
+
+    $config.popup("open").trigger("create");
+};
