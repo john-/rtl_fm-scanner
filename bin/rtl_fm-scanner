@@ -14,23 +14,24 @@ use constant FREQ       => 0;
 use constant DESIGNATOR => 1;
 use constant PASS       => 7;
 
-my $config = plugin Config => {file => '../config/scanner.conf'};
+my $config = plugin Config => { file => '../config/scanner.conf' };
 
 app->plugin('RenderFile');
-app->plugin('CORS');        # lets the client get around same origin policy restriction
+app->plugin('CORS'); # lets the client get around same origin policy restriction
 
 app->secrets( ['Specfying a secret to make the reminder go away.'] );
 
 my $dbname = '../data/freqs.db';
 
-my $trans_id = 0;
-my $xmit_timer;    # stores the id of the loop that limits length of xmit
+my $xmit_timer;      # stores the id of the loop that limits length of xmit
 app->defaults( state => () );
 
 get '/self' => sub {
-    my $c    = shift;
+    my $c = shift;
 
-    $c->render(json => { function => 'Scanner' } );
+    $c->render( json => { function => 'Scanner' } );
+# ugh this is nasty but I need to store it here because it does not work in the helper
+    app->defaults->{audio_url} = $c->url_for('audio')->to_abs;
 };
 
 get '/script' => { template => 'script' };
@@ -41,7 +42,7 @@ get '/audio' => sub {
 
     # Open file in browser(do not show save dialog)
     $c->render_file(
-        'filepath' => "../archive/$file",
+        'filepath'            => "../archive/$file",
         'content_disposition' => 'inline'
     );
 };
@@ -51,30 +52,20 @@ get '/freqs' => { template => 'freqs' };
 websocket '/output' => sub {
     my $c = shift;
 
-    $c->inactivity_timeout(60);
+    $c->inactivity_timeout(90);
 
-# There must be a better way of addressing this.  Requirements are that there is a long running
-# process started when aplication starts (see above).  This process needs to exist independently
-# of client conntections.  I could not figure out a way for this client specifc code to wait for
-# a change in the output from the long running process.  Therefore, it is checking if a global
-# that contains current state of that process differs from what was sent to client previously.
-# If it does differ it is sent to client.  Otherwise it is ignored.
-# In this application there will be at most 2 clients connecting.
-    my $trans_ref = 0;
+    my $client =
+      $c->tx->remote_address . $c->tx->remote_port;    # unique identifier
+
     my $id        = Mojo::IOLoop->recurring(
-        0.25 => sub {
+        0.5 => sub {
             my $loop = shift;
 
-            if ( $trans_ref == $trans_id ) { return }
-
-            my %details = %{ app->defaults('state') };
-
-	    $details{url} = $c->url_for('audio')->to_abs;  # doesn't work in the helper
-
-            $c = $c->send( { json => \%details } );
-            app->log->info(
-               sprintf( 'let client know about %s', $details{url} ) );
-            $trans_ref = $trans_id;
+	    while ( my $msg = app->get_msg($client) )
+            {
+                $c = $c->send( { json => $msg } );
+                app->log->info("item to let client know about: $msg->{type}");
+            }
         }
     );
 
@@ -89,10 +80,12 @@ websocket '/output' => sub {
 # TODO:  Update db for this freq and then reload rtl_fm with refreshed list of freqs
                 app->update_pass( $hash->{freq}, $hash->{designator} );
                 $c->start_rtlfm;
-            } elsif ( $hash->{type} eq 'squelch' ) {
-		$config->{squelch} = $hash->{squelch};
-                $c->start_rtlfm;   # need to start rtl_fm for changes to take effect
-	    }
+            }
+            elsif ( $hash->{type} eq 'squelch' ) {
+                $config->{squelch} = $hash->{squelch};
+                $c->start_rtlfm
+                  ;    # need to start rtl_fm for changes to take effect
+            }
 
             #app->log->debug("Message: ".dumper($hash));
         }
@@ -107,6 +100,19 @@ websocket '/output' => sub {
     );
 };
 
+helper get_msg => sub {
+    my ( $self, $client ) = @_;
+
+    return shift @{ app->defaults->{announce_sub}{$client} };
+};
+
+helper publish => sub {
+    my ( $self, $msg ) = @_;
+
+    push @$_, $msg
+      for values %{ app->defaults->{announce_sub} };
+};
+
 helper connector => sub {
     state $db = DBIx::Connector->new( "dbi:SQLite:$dbname", "", "" )
       or app->log->error('Could not connect to database');
@@ -118,10 +124,8 @@ helper select => sub {
     my ( $self, $group ) = @_;
 
     # TODO:  At some point limit based on current year or something.
-    my $sth = eval {
-        $self->db->prepare(
-            'SELECT * FROM freqs where groups like ?');
-    }
+    my $sth =
+      eval { $self->db->prepare('SELECT * FROM freqs where groups like ?'); }
       || return undef;
     $sth->execute($group);
     return $sth->fetchall_arrayref;
@@ -147,19 +151,19 @@ helper set_state => sub {
         my $freq_list  = app->defaults('freq_list');
         my $designator = $freq_list->{$freq}{designator};
         $detail = {
-	    type       => 'audio',
+            type       => 'audio',
             freq       => $freq,
             file       => $file,
-	    #url        => $c->url_for('script')->to_abs,
-            trans_id   => $trans_id,
+            url        => app->defaults->{audio_url},
+            #trans_id   => $trans_id,
             start      => time(),
             designator => $designator,
         };
 
         app->defaults( state => $detail );
-        app->log->debug( app->dumper($detail) );
+        #app->log->debug( app->dumper($detail) );
 
-	$freq_list->{$freq}{count}++;
+        $freq_list->{$freq}{count}++;
 
         # start timer to stop open mic/long data
         $xmit_timer = Mojo::IOLoop->timer(
@@ -177,7 +181,7 @@ helper set_state => sub {
         $detail = app->defaults('state');
         $detail->{end} = time();
         app->defaults( state => $detail );
-        $trans_id++;
+	app->publish( $detail );
     }
 
 };
@@ -196,7 +200,7 @@ helper start_rtlfm => sub {
         app->log->info( sprintf( 'About to kill rtl_fm (pid: %s)', $pid ) );
         kill 'HUP', $pid;
         delete app->defaults->{rtlfm_pid};
-        Mojo::IOLoop->timer( 1 => sub { $c->start_rtlfm } );   # Time to exit
+        Mojo::IOLoop->timer( 1 => sub { $c->start_rtlfm } );    # Time to exit
         return;
     }
 
@@ -211,10 +215,12 @@ helper start_rtlfm => sub {
     foreach my $freq_detail (@freqs) {
         my $freq = $freq_detail->[FREQ];
         chomp($freq);
-        $freq_list{$freq} = { designator => $freq_detail->[DESIGNATOR],
-	                      pass       => $freq_detail->[PASS]};
+        $freq_list{$freq} = {
+            designator => $freq_detail->[DESIGNATOR],
+            pass       => $freq_detail->[PASS]
+        };
 
-	if ($freq_detail->[PASS] == NO_PASS) {
+        if ( $freq_detail->[PASS] == NO_PASS ) {
             push @freq_args, sprintf( "-f %sM", $freq );
         }
     }
@@ -291,7 +297,6 @@ helper start_rtlfm => sub {
 };
 
 app->start_rtlfm;
-
 
 app->start;
 
