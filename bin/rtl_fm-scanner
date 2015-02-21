@@ -52,10 +52,12 @@ get '/freqs' => { template => 'freqs' };
 websocket '/output' => sub {
     my $c = shift;
 
-    $c->inactivity_timeout(90);
+    $c->inactivity_timeout(60);
 
     my $client =
       $c->tx->remote_address . $c->tx->remote_port;    # unique identifier
+
+    $c->send( { json => app->config_msg } );
 
     my $id        = Mojo::IOLoop->recurring(
         0.5 => sub {
@@ -73,7 +75,9 @@ websocket '/output' => sub {
         json => sub {
             my ( $ws, $hash ) = @_;
 
-            if ( $hash->{type} eq 'pass' ) {
+	    if ( $hash->{type} eq 'ping' ) {
+		app->log->debug('client pinged me');
+            } elsif ( $hash->{type} eq 'pass' ) {
                 app->log->info(
                     sprintf( 'Request to put a pass on %s', $hash->{freq} ) );
 
@@ -81,10 +85,14 @@ websocket '/output' => sub {
                 app->update_pass( $hash->{freq}, $hash->{designator} );
                 $c->start_rtlfm;
             }
-            elsif ( $hash->{type} eq 'squelch' ) {
-                $config->{squelch} = $hash->{squelch};
-                $c->start_rtlfm
-                  ;    # need to start rtl_fm for changes to take effect
+            elsif ( $hash->{type} eq 'config' ) {
+		if ( $hash->{squelch} ) {
+                    $config->{squelch} = $hash->{squelch};
+                    $c->start_rtlfm
+                      ;    # need to start rtl_fm for changes to take effect
+                }
+
+		app->publish( app->config_msg );
             }
 
             #app->log->debug("Message: ".dumper($hash));
@@ -112,6 +120,13 @@ helper publish => sub {
     push @$_, $msg
       for values %{ app->defaults->{announce_sub} };
 };
+
+helper config_msg => sub {
+    my $self = shift;
+
+    return { type => 'config', %{ $config } };
+};
+
 
 helper connector => sub {
     state $db = DBIx::Connector->new( "dbi:SQLite:$dbname", "", "" )
@@ -155,7 +170,6 @@ helper set_state => sub {
             freq       => $freq,
             file       => $file,
             url        => app->defaults->{audio_url},
-            #trans_id   => $trans_id,
             start      => time(),
             designator => $designator,
         };
@@ -324,11 +338,22 @@ console.log("Scanner code running");
 
 var scan_ws = new WebSocket('<%= url_for('output')->to_abs %>');
 
+setInterval(function () {
+        scan_ws.send(JSON.stringify( { type: "ping" } ));
+        }, 45000
+);
+
+var config;
 scan_ws.onmessage = function (event) {
     var msg = JSON && JSON.parse(event.data) || $.parseJSON(data);
 
-    if (msg.type == 'audio') {
-        enqueue(msg);
+    switch (msg.type) {
+        case 'audio':
+            enqueue(msg);
+            break;
+        case 'config':
+            config = msg;
+            break;
     }
 };
 
@@ -349,6 +374,7 @@ scanner_config = function() {
 
     // approach from: http://stackoverflow.com/questions/16015810/jquery-mobile-best-way-to-create-pop-up-and-content-dynamically
 
+    console.log("squelch: " + config.squelch);
     var $config = $("<div/>").popup({
         theme : "a",
         overlyaTheme : "a",
@@ -375,7 +401,7 @@ scanner_config = function() {
         type : 'range',
         name : 'squelch',
         id : 'squelch',
-        value : '60',
+        value : config.squelch,
         min : '0',
         max : '100'
     })).appendTo($config);
@@ -388,7 +414,7 @@ scanner_config = function() {
         icon : "check"
     }).bind("click", function() {
         $config.popup("close");
-        console.log( 'squelch: ' + $('#squelch').val() );
+        check_for_changes();
         //that.subscribeToAsset(callback);
     }).appendTo($config);
 
@@ -403,4 +429,13 @@ scanner_config = function() {
     }).appendTo($config);
 
     $config.popup("open").trigger("create");
+};
+
+check_for_changes = function() {
+
+    if ( $('#squelch').val() != config.squelch ) {
+        scan_ws.send(JSON.stringify( { type: "config", squelch: $('#squelch').val() } ));        
+    }
+
+
 };
