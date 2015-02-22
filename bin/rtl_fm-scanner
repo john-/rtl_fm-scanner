@@ -85,12 +85,9 @@ websocket '/output' => sub {
                 app->update_pass( $hash->{freq}, $hash->{designator} );
                 $c->start_rtlfm;
             }
-            elsif ( $hash->{type} eq 'config' ) {
-		if ( $hash->{squelch} ) {
-                    $config->{squelch} = $hash->{squelch};
-                    $c->start_rtlfm
-                      ;    # need to start rtl_fm for changes to take effect
-                }
+            elsif ( $hash->{type} eq 'set_squelch' ) {
+                $config->{squelch} = $hash->{squelch};
+                $c->start_rtlfm;    # need to start rtl_fm for changes to take effect
 
 		app->publish( app->config_msg );
             }
@@ -343,16 +340,16 @@ setInterval(function () {
         }, 45000
 );
 
-var config;
+var scan_config;
 scan_ws.onmessage = function (event) {
-    var msg = JSON && JSON.parse(event.data) || $.parseJSON(data);
+    var msg = $.parseJSON(event.data);
 
     switch (msg.type) {
         case 'audio':
             enqueue(msg);
             break;
         case 'config':
-            config = msg;
+            scan_config = msg;
             break;
     }
 };
@@ -374,7 +371,7 @@ scanner_config = function() {
 
     // approach from: http://stackoverflow.com/questions/16015810/jquery-mobile-best-way-to-create-pop-up-and-content-dynamically
 
-    console.log("squelch: " + config.squelch);
+    console.log("squelch: " + scan_config.squelch);
     var $config = $("<div/>").popup({
         theme : "a",
         overlyaTheme : "a",
@@ -401,7 +398,7 @@ scanner_config = function() {
         type : 'range',
         name : 'squelch',
         id : 'squelch',
-        value : config.squelch,
+        value : scan_config.squelch,
         min : '0',
         max : '100'
     })).appendTo($config);
@@ -433,9 +430,7 @@ scanner_config = function() {
 
 check_for_changes = function() {
 
-    if ( $('#squelch').val() != config.squelch ) {
-        scan_ws.send(JSON.stringify( { type: "config", squelch: $('#squelch').val() } ));        
-    }
-
+    if ( $('#squelch').val() != scan_config.squelch ) {
+        scan_ws.send(JSON.stringify( { type: "set_squelch", squelch: $('#squelch').val() } ));         }
 
 };
