@@ -47,7 +47,36 @@ get '/audio' => sub {
     );
 };
 
-get '/freqs' => { template => 'freqs' };
+get '/freqs' => sub {
+    my $c    = shift;
+
+    my $freqs  = app->defaults('freq_list');
+
+    
+    #$c->render(text =>
+    my $output = '<ul data-role="listview" data-inset="false" id="freq_listview">';
+    #);
+    foreach my $freq (sort keys %$freqs) {
+#        $c->render(text =>
+        my $aside = sprintf('<p>%d</p>', defined $freqs->{$freq}{count} ? $freqs->{$freq}{count} : 0);
+	
+	if ($freqs->{$freq}{pass} == AUTO_PASS) { 
+            $aside .= '<p>Autopass</p>'
+        } elsif ($freqs->{$freq}{pass} == MANUAL_PASS) {
+            $aside .= '<p>Userpass</p>'
+        }
+
+        $output .=   sprintf('<li><a href="#%s"><h2>%s</h2><p>%s</p><div class="ui-li-aside">%s</div></a></li>',
+		$freq,
+                $freqs->{$freq}{designator}, 
+                $freq,
+		$aside
+	    )
+#        );
+    }
+
+    $c->render( text => $output );
+};
 
 websocket '/output' => sub {
     my $c = shift;
@@ -322,7 +351,7 @@ app->start;
 
 __DATA__
 
-@@ freqs.html.ep
+@@ freqs_old.html.ep
 <!-- TODO:
         - Show indicator for pass (manual), pass (auto), data
         - Allow user to manually override pass or manually set it
@@ -333,7 +362,8 @@ __DATA__
 <body>
     <ul data-role="listview" data-inset="false" id="freq_listview">
     % foreach my $freq (sort keys %$freq_list) {
-    <li><a href="#"><%= sprintf('%s (%s)', $freq_list->{$freq}{designator}, $freq) %><span class="ui-li-count"><%= $freq_list->{$freq}{count} %></span></a></li>
+        <li><a href="#"><%= sprintf('%s (%s)', $freq_list->{$freq}{designator}, $freq) %><div class="ui-li-aside"><%= $freq_list->{$freq}{pass} %></p><p><%= $freq_list->{$freq}{count} %></p></div></a></li>
+<!--    <li><a href="#"><%= sprintf('%s (%s)', $freq_list->{$freq}{designator}, $freq) %><span class="ui-li-count"><%= $freq_list->{$freq}{count} %></span></a></li>  -->
     % }
     </ul>
 </body>
@@ -450,3 +480,12 @@ check_for_changes = function() {
         scan_ws.send(JSON.stringify( { type: "set_squelch", squelch: $('#squelch').val() } ));         }
 
 };
+
+
+$('#scanner ul').on("pagecreate",function(){
+    console.log('listview created');
+    $( '#freq_listview li a' ).on( "taphold", function( event ) {
+        var config = $( this ).text().toLowerCase() + '_config';
+        console.log('taphold load: ' + config);
+    });
+});
