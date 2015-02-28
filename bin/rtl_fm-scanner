@@ -241,7 +241,7 @@ helper start_rtlfm => sub {
     #app->log->debug(dumper(app->defaults->{freq_list}));
 
     my $cmd =
-"/usr/local/bin/rtl_fm -M $config->{mode} -p $config->{ppm} @freq_args -s 12k -l $config->{squelch} -g 49.2 -E wav -n ../archive /tmp/ignored.out";
+"/usr/local/bin/rtl_fm -M $config->{mode} -p $config->{ppm} @freq_args -s 12k -l $config->{squelch} -g $config->{gain} -E wav -n ../archive /tmp/ignored.out";
 
 #app->log->info('You must read audio from fifo: aplay -f S16_LE -r 12000 /tmp/rtlfm_audio.wav');
     my $rtlfm_fifo;
@@ -347,6 +347,7 @@ scan_ws.onmessage = function (event) {
     switch (msg.type) {
         case 'audio':
             enqueue(msg);
+            scanner_page();
             break;
         case 'config':
             scan_config = msg;
@@ -355,6 +356,12 @@ scan_ws.onmessage = function (event) {
 };
 
 scanner_page = function () {
+
+    // TODO: this is pretty convoluted and better way should be found
+    var active_id = $("#switcher").tabs("option", "active");
+    active = $("#switcher ul>li a").eq(active_id).attr('href');
+
+    if (active != '#scanner') { return }
 
     console.log("Populating scanner page");
 
