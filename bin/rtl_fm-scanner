@@ -47,7 +47,7 @@ get '/audio' => sub {
     );
 };
 
-get '/freqs' => sub {
+get '/freqsOLD' => sub {
     my $c    = shift;
 
     my $freqs  = app->defaults('freq_list');
@@ -76,6 +76,13 @@ get '/freqs' => sub {
     }
 
     $c->render( text => $output );
+};
+
+get '/freqs' => sub {
+    my $c = shift;
+
+    #app->log->info(dumper( app->defaults('freq_list') ) );
+    $c->render( json => app->defaults('freq_list') );
 };
 
 websocket '/output' => sub {
@@ -404,13 +411,39 @@ scanner_page = function () {
 
     console.log("Populating scanner page");
 
-    $.ajax({
-        url: '<%= url_for('freqs')->to_abs %>',
-        cache: false
-    })
-       .done(function( html ) {
-           $( '#scanner' ).empty().append(html).enhanceWithin();
-       });
+    $.getJSON( '<%= url_for('freqs')->to_abs %>' )
+        .done(function( json ) {
+   	    $('#scanner').empty().append('<ul data-role="listview" id="frequencies"></ol>');
+	    $.each( json, function(freq, detail) {
+
+                    var contents = '<h2>' + detail.designator + '</h2><p>' + 
+                                  freq + '</p><div class="ui-li-aside"><p>' +
+                                  detail.count + ' hits</p></div>';
+                                  //freq.freq + '</p><div class="ui-li-aside"><p>Interval: ' +
+                                  //pos.interval + '</p><p>Gap: ' + pos.gap + '</p></div>';
+
+		    $('<li/>')
+		        .append(
+		  	    $('<a/>', {
+			        html: contents,
+			        href: "#" + freq
+			    })
+			    ).appendTo("#frequencies");
+
+            });
+
+            // There may be another way but this appears to work:
+            // http://www.gajotres.net/uncaught-error-cannot-call-methods-on-prior-to-initialization-attempted-to-call-method-refresh/
+            $('#frequencies').listview().listview('refresh');
+
+            $( '#frequencies li a' ).on( "taphold", function( event ) {
+                var config = $( this ).attr('href').toLowerCase();
+                console.log('taphold load: ' + config);
+            });
+
+        });
+
+
 };
 
 scanner_config = function() {
