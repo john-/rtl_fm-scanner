@@ -240,10 +240,19 @@ helper start_rtlfm => sub {
 
     #app->log->debug(dumper(app->defaults->{freq_list}));
 
-    my $cmd =
-"/usr/local/bin/rtl_fm -M $config->{mode} -p $config->{ppm} @freq_args -s 12k -l $config->{squelch} -g $config->{gain} -E wav -n ../archive /tmp/ignored.out";
+    my @args = ( '/usr/local/bin/rtl_fm',
+		 '-M', $config->{mode},
+		 '-p', $config->{ppm},
+		 '-s', '12k',
+		 '-l', $config->{squelch},
+		 '-g', $config->{gain},
+		 '-E', 'wav',
+		 @freq_args,
+		 '-n', '../archive',
+		 '/tmp/ignored.out'
+	);
+    my $cmd = join(' ', @args);
 
-#app->log->info('You must read audio from fifo: aplay -f S16_LE -r 12000 /tmp/rtlfm_audio.wav');
     my $rtlfm_fifo;
     my $rtlfm_pid = open( $rtlfm_fifo, "$cmd 2>&1 |" ) or do {
 
