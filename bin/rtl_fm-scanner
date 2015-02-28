@@ -217,14 +217,14 @@ helper start_rtlfm => sub {
 
     app->log->info('about to start rtl_fm');
 
-    my @freqs = @{ app->select('%FRS%') };
+    my @freqs = @{ app->select( $config->{group} ) };
 
     #app->log->info('database dump'.dumper(@freqs));
 
     my @freq_args;
     my %freq_list;
     foreach my $freq_detail (@freqs) {
-        my $freq = $freq_detail->[FREQ];
+        my $freq = $freq_detail->[FREQ] += 0;  # remove trailing zeros
         chomp($freq);
         $freq_list{$freq} = {
             designator => $freq_detail->[DESIGNATOR],
@@ -241,7 +241,7 @@ helper start_rtlfm => sub {
     #app->log->debug(dumper(app->defaults->{freq_list}));
 
     my $cmd =
-"/usr/local/bin/rtl_fm -M fm -p 34 @freq_args -s 12k -l $config->{squelch} -g 49.2 -E wav -n ../archive /tmp/ignored.out";
+"/usr/local/bin/rtl_fm -M $config->{mode} -p $config->{ppm} @freq_args -s 12k -l $config->{squelch} -g 49.2 -E wav -n ../archive /tmp/ignored.out";
 
 #app->log->info('You must read audio from fifo: aplay -f S16_LE -r 12000 /tmp/rtlfm_audio.wav');
     my $rtlfm_fifo;
