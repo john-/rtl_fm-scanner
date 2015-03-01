@@ -421,9 +421,6 @@ scanner_config = function() {
         text : "Scanner Configuration"
     }).appendTo($config);
 
-    //<label for="slider-1">Input slider:</label>
-    //<input type="range" name="slider-1" id="slider-1" value="60" min="0" max="100" />
-
     //create a form for the pop up
     $('<form>').append(
         $('<label>', {
