@@ -81,12 +81,11 @@ websocket '/output' => sub {
 
 	    if ( $hash->{type} eq 'ping' ) {
 		app->log->debug('client pinged me');
-            } elsif ( $hash->{type} eq 'pass' ) {
+            } elsif ( $hash->{type} eq 'set_pass' ) {
                 app->log->info(
-                    sprintf( 'Request to put a pass on %s', $hash->{freq} ) );
+                    sprintf( 'Request to change pass for %s to %s', $hash->{freq}, $hash->{pass} ) );
 
-# TODO:  Update db for this freq and then reload rtl_fm with refreshed list of freqs
-                app->update_pass( $hash->{freq}, $hash->{designator} );
+                app->update_pass( $hash->{freq}, $hash->{designator}, $hash->{pass} );
                 $c->start_rtlfm;
             }
             elsif ( $hash->{type} eq 'set_squelch' ) {
@@ -148,13 +147,14 @@ helper select => sub {
 };
 
 helper update_pass => sub {
-    my ( $self, $freq, $designator ) = @_;
+    my ( $self, $freq, $designator, $pass ) = @_;
     my $sth = eval {
         $self->db->prepare(
             'UPDATE freqs SET pass=? WHERE frequency = ? AND designator = ?');
     }
       || return undef;
-    $sth->execute( AUTO_PASS, $freq, $designator );
+    $sth->execute( $pass, $freq, $designator );
+    #app->log->info( sprintf('|%s|%s|%s|', $pass, $freq, $designator) );
 };
 
 helper set_state => sub {
@@ -170,6 +170,7 @@ helper set_state => sub {
             type       => 'audio',
             freq       => $freq,
             file       => $file,
+	    count      => ++$freq_list->{$freq}{count},
             url        => app->defaults->{audio_url},
             start      => time(),
             designator => $designator,
@@ -178,13 +179,11 @@ helper set_state => sub {
         app->defaults( state => $detail );
         #app->log->debug( app->dumper($detail) );
 
-        $freq_list->{$freq}{count}++;
-
         # start timer to stop open mic/long data
         $xmit_timer = Mojo::IOLoop->timer(
             10 => sub {
                 my $loop = shift;
-                app->update_pass( $freq, $designator );
+                app->update_pass( $freq, $designator, AUTO_PASS );
                 app->log->debug(
                     sprintf( 'Set pass on %s (%s)', $freq, $designator ) );
                 $c->start_rtlfm;
@@ -223,6 +222,7 @@ helper start_rtlfm => sub {
 
     my @freqs = @{ app->select( $config->{group} ) };
 
+    app->publish( { type => 'update' } );  # if start of rtl_fm expect change
     #app->log->info('database dump'.dumper(@freqs));
 
     my @freq_args;
@@ -345,6 +345,9 @@ scan_ws.onmessage = function (event) {
             enqueue(msg);
             scanner_page();
             break;
+        case 'update':
+            scanner_page();
+            break;
         case 'config':
             scan_config = msg;
             break;
@@ -383,7 +386,8 @@ scanner_page = function () {
 		    .append(
 		  	$('<a/>', {
 			    html: contents,
-			    href: "#" + freq
+			    href: "#" + freq,
+                            id: freq
 			})
 			).appendTo("#frequencies");
 
@@ -394,13 +398,94 @@ scanner_page = function () {
             $('#frequencies').listview().listview('refresh');
 
             $( '#frequencies li a' ).on( "taphold", function( event ) {
-                var config = $( this ).attr('href').toLowerCase();
-                console.log('taphold load: ' + config);
+                var freq = $( this ).attr('id');
+                frequency_config(freq, json[freq]);
             });
 
         });  // end .done
 
 
+};
+
+frequency_config = function(freq, detail) {
+
+    var choices = [ 'none', 'manual', 'auto' ];
+
+    var $config = $("<div/>").popup({
+        theme : "a",
+        overlyaTheme : "a",
+        transition : "pop"
+    }).on("popupafterclose", function() {
+        //remove the popup when closing
+        $(this).remove();
+    });
+
+    $("<h2/>", {
+        text : detail.designator + '(' + freq + ')'
+    }).appendTo($config);
+
+    //create a form for the pop up
+    var $form = $('<form/>');
+
+    var $radio_btns = $('<fieldset/>', {
+            'data-role': 'controlgroup',
+            'data-type': 'horizontal'
+        });
+
+    $('<legend/>', { text: 'Pass' }).appendTo($radio_btns);
+
+    $.each( choices, function( index, choice ) {
+        $('<input/>', {
+            type : 'radio',
+            name : 'pass-choice',
+            id : 'pass-choice-' + choice,
+            value : index,
+        }).appendTo($radio_btns);
+
+        $('<label>', {
+            for: 'pass-choice-' + choice,
+            text: choice
+        }).appendTo($radio_btns);
+    });
+
+   $radio_btns.appendTo($form).appendTo($config);
+
+   //Create a submit button(fake)
+    $("<a>", {
+        text : "OK"
+    }).buttonMarkup({
+        inline : true,
+        icon : "check"
+    }).bind("click", function() {
+        $config.popup("close");
+        var new_pass = $('input[name=pass-choice]:checked').val();
+        if ( detail.pass != new_pass ) {
+
+            scan_ws.send(JSON.stringify( { 
+                type: "set_pass",
+                freq: freq,
+                designator: detail.designator,
+                pass: new_pass
+            } ));
+
+        }
+    }).appendTo($config);
+
+    //create a back button
+    $("<a>", {
+        text : "Cancel",
+    }).buttonMarkup({
+        inline : true,
+        icon : "back"
+    }).bind('click', function() {
+        $config.popup('close');
+    }).appendTo($config);
+
+    $('#pass-choice-'+choices[detail.pass]).attr('checked', true);
+
+    $config.popup("open").trigger("create");
+
+    $('#pass-choice-auto').checkboxradio('disable');
 };
 
 scanner_config = function() {
