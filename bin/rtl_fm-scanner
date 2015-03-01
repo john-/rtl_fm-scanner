@@ -47,41 +47,9 @@ get '/audio' => sub {
     );
 };
 
-get '/freqsOLD' => sub {
-    my $c    = shift;
-
-    my $freqs  = app->defaults('freq_list');
-
-    
-    #$c->render(text =>
-    my $output = '<ul data-role="listview" data-inset="false" id="freq_listview">';
-    #);
-    foreach my $freq (sort keys %$freqs) {
-#        $c->render(text =>
-        my $aside = sprintf('<p>%d</p>', defined $freqs->{$freq}{count} ? $freqs->{$freq}{count} : 0);
-	
-	if ($freqs->{$freq}{pass} == AUTO_PASS) { 
-            $aside .= '<p>Autopass</p>'
-        } elsif ($freqs->{$freq}{pass} == MANUAL_PASS) {
-            $aside .= '<p>Userpass</p>'
-        }
-
-        $output .=   sprintf('<li><a href="#%s"><h2>%s</h2><p>%s</p><div class="ui-li-aside">%s</div></a></li>',
-		$freq,
-                $freqs->{$freq}{designator}, 
-                $freq,
-		$aside
-	    )
-#        );
-    }
-
-    $c->render( text => $output );
-};
-
 get '/freqs' => sub {
     my $c = shift;
 
-    #app->log->info(dumper( app->defaults('freq_list') ) );
     $c->render( json => app->defaults('freq_list') );
 };
 
@@ -358,24 +326,6 @@ app->start;
 
 __DATA__
 
-@@ freqs_old.html.ep
-<!-- TODO:
-        - Show indicator for pass (manual), pass (auto), data
-        - Allow user to manually override pass or manually set it
-        - This is a static page.  Maybe make it update in real time.
--->
-<!DOCTYPE html>
-<html>
-<body>
-    <ul data-role="listview" data-inset="false" id="freq_listview">
-    % foreach my $freq (sort keys %$freq_list) {
-        <li><a href="#"><%= sprintf('%s (%s)', $freq_list->{$freq}{designator}, $freq) %><div class="ui-li-aside"><%= $freq_list->{$freq}{pass} %></p><p><%= $freq_list->{$freq}{count} %></p></div></a></li>
-<!--    <li><a href="#"><%= sprintf('%s (%s)', $freq_list->{$freq}{designator}, $freq) %><span class="ui-li-count"><%= $freq_list->{$freq}{count} %></span></a></li>  -->
-    % }
-    </ul>
-</body>
-</html>
-
 @@ script.html.ep
 console.log("Scanner code running");
 
@@ -416,19 +366,26 @@ scanner_page = function () {
    	    $('#scanner').empty().append('<ul data-role="listview" id="frequencies"></ol>');
 	    $.each( json, function(freq, detail) {
 
-                    var contents = '<h2>' + detail.designator + '</h2><p>' + 
-                                  freq + '</p><div class="ui-li-aside"><p>' +
-                                  detail.count + ' hits</p></div>';
-                                  //freq.freq + '</p><div class="ui-li-aside"><p>Interval: ' +
-                                  //pos.interval + '</p><p>Gap: ' + pos.gap + '</p></div>';
+                var info = freq.toString();
+                if (detail.count) { info += ' / ' + detail.count + ' hits' }
+                switch (detail.pass) {
+                    case 1:
+                        info += ' / Manual Pass';
+                        break;
+                    case 2:
+                        info += ' / Auto Pass';
+                        break;
+                }
+                var contents = '<h2>' + detail.designator + '</h2><p>' + 
+                               info + '</p>';
 
-		    $('<li/>')
-		        .append(
-		  	    $('<a/>', {
-			        html: contents,
-			        href: "#" + freq
-			    })
-			    ).appendTo("#frequencies");
+		$('<li/>')
+		    .append(
+		  	$('<a/>', {
+			    html: contents,
+			    href: "#" + freq
+			})
+			).appendTo("#frequencies");
 
             });
 
@@ -514,11 +471,3 @@ check_for_changes = function() {
 
 };
 
-
-$('#scanner ul').on("pagecreate",function(){
-    console.log('listview created');
-    $( '#freq_listview li a' ).on( "taphold", function( event ) {
-        var config = $( this ).text().toLowerCase() + '_config';
-        console.log('taphold load: ' + config);
-    });
-});
