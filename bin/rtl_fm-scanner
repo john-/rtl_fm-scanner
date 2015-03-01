@@ -387,7 +387,7 @@ scanner_page = function () {
 			})
 			).appendTo("#frequencies");
 
-            });
+            });  // end .each
 
             // There may be another way but this appears to work:
             // http://www.gajotres.net/uncaught-error-cannot-call-methods-on-prior-to-initialization-attempted-to-call-method-refresh/
@@ -398,7 +398,7 @@ scanner_page = function () {
                 console.log('taphold load: ' + config);
             });
 
-        });
+        });  // end .done
 
 
 };
