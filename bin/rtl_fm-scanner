@@ -82,9 +82,6 @@ websocket '/output' => sub {
 	    if ( $hash->{type} eq 'ping' ) {
 		app->log->debug('client pinged me');
             } elsif ( $hash->{type} eq 'set_pass' ) {
-                app->log->info(
-                    sprintf( 'Request to change pass for %s to %s', $hash->{freq}, $hash->{pass} ) );
-
                 app->update_pass( $hash->{freq}, $hash->{bank}, $hash->{pass} );
                 $c->start_rtlfm;
             }
@@ -150,6 +147,11 @@ helper select => sub {
 
 helper update_pass => sub {
     my ( $self, $freq, $bank, $pass ) = @_;
+
+    app->log->info(
+        sprintf( 'change pass for %s to %s', $freq, $pass ) );
+
+
     my $sth = eval {
         $self->db->prepare(
             'UPDATE freqs SET pass=? WHERE freq = ? AND bank = ?');
@@ -176,27 +178,14 @@ helper update_count => sub {
 helper set_state => sub {
     my ( $c, $status, $freq, $file ) = @_;
 
-    # TODO:  Save interesting bits in a DB on open/close
-
     my $entry;
     if ( $status eq 'OPEN' ) {
         my @freq_list  = @{ app->defaults('freq_list') };
 	($entry) = grep { $_->{freq} == $freq } @freq_list;
-        #my $label = $freq_list->{$freq}{designator};
 	$entry->{type} = 'audio';
 	$entry->{file} = $file;
         $entry->{url}  = app->defaults->{audio_url};
         $entry->{start} = time();
-	#app->log->info('entry' . dumper($entry));
-        #$detail = {
-        #    type       => 'audio',
-            #freq       => $freq,
-        #    file       => $file,
-	#    count      => ++$freq_list->{$freq}{count},
-        #    url        => app->defaults->{audio_url},
-        #    start      => time(),
-            #designator => $designator,
-        #};
 
         app->defaults( state => $entry );
         #app->log->debug( app->dumper($detail) );
@@ -206,8 +195,6 @@ helper set_state => sub {
             10 => sub {
                 my $loop = shift;
                 app->update_pass( $freq, $entry->{bank}, AUTO_PASS );
-                app->log->debug(
-                    sprintf( 'Set pass on %s (%s)', $freq, $entry->{label} ) );
                 $c->start_rtlfm;
             }
         );
@@ -216,7 +203,6 @@ helper set_state => sub {
         Mojo::IOLoop->remove($xmit_timer);
         $entry = app->defaults('state');
         $entry->{end} = time();
-	# increment DB count
 	++$entry->{count};
 	app->update_count($entry);
         app->defaults( state => $entry );
@@ -229,15 +215,10 @@ helper load_freqs => sub {
 
     my @freqs;
     foreach my $bank ( @{ $config->{banks} } ) {
-
         push @freqs,  @{ app->select( $bank ) };
-
     }
 
-    #app->log->info(dumper(@freqs));
-
     app->defaults( freq_list => \@freqs );
-
 };
 
 helper start_rtlfm => sub {
@@ -259,8 +240,6 @@ helper start_rtlfm => sub {
     }
 
     app->log->info('about to start rtl_fm');
-
-    #my @freqs = @{ app->select( $config->{group} ) };
 
     my @freqs = @{ app->defaults->{freq_list} };
     my @freq_args;
