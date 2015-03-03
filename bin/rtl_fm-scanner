@@ -85,7 +85,7 @@ websocket '/output' => sub {
                 app->log->info(
                     sprintf( 'Request to change pass for %s to %s', $hash->{freq}, $hash->{pass} ) );
 
-                app->update_pass( $hash->{freq}, $hash->{designator}, $hash->{pass} );
+                app->update_pass( $hash->{freq}, $hash->{bank}, $hash->{pass} );
                 $c->start_rtlfm;
             }
             elsif ( $hash->{type} eq 'set_squelch' ) {
@@ -141,84 +141,102 @@ helper select => sub {
     # TODO:  At some point limit based on current year or something.
     # TODO:  Sort by designator
     my $sth =
-      eval { $self->db->prepare('SELECT * FROM freqs where groups like ?'); }
+      eval { $self->db->prepare(
+          'select * from freqs where bank like ? order by label'); }
       || return undef;
     $sth->execute($group);
-    return $sth->fetchall_arrayref;
+    return $sth->fetchall_arrayref({});
 };
 
 helper update_pass => sub {
-    my ( $self, $freq, $designator, $pass ) = @_;
+    my ( $self, $freq, $bank, $pass ) = @_;
     my $sth = eval {
         $self->db->prepare(
-            'UPDATE freqs SET pass=? WHERE frequency = ? AND designator = ?');
+            'UPDATE freqs SET pass=? WHERE freq = ? AND bank = ?');
     }
       || return undef;
-    $sth->execute( $pass, $freq, $designator );
+    $sth->execute( $pass, $freq, $bank );
 
     app->load_freqs;
     app->publish( { type => 'update' } ); # what freqs are available
-    #app->log->info( sprintf('|%s|%s|%s|', $pass, $freq, $designator) );
+    #app->log->info( sprintf('|%s|%s|%s|', $pass, $freq, $label) );
 };
+
+helper update_count => sub {
+    my ( $self, $entry ) = @_;
+    my $sth = eval {
+        $self->db->prepare(
+            'UPDATE freqs SET count=? WHERE freq = ? AND bank = ?');
+    }
+      || return undef;
+    $sth->execute( $entry->{count}, $entry->{freq}, $entry->{bank} );
+};
+
 
 helper set_state => sub {
     my ( $c, $status, $freq, $file ) = @_;
 
     # TODO:  Save interesting bits in a DB on open/close
 
-    my $detail;
+    my $entry;
     if ( $status eq 'OPEN' ) {
-        my $freq_list  = app->defaults('freq_list');
-        my $designator = $freq_list->{$freq}{designator};
-        $detail = {
-            type       => 'audio',
-            freq       => $freq,
-            file       => $file,
-	    count      => ++$freq_list->{$freq}{count},
-            url        => app->defaults->{audio_url},
-            start      => time(),
-            designator => $designator,
-        };
+        my @freq_list  = @{ app->defaults('freq_list') };
+	($entry) = grep { $_->{freq} == $freq } @freq_list;
+        #my $label = $freq_list->{$freq}{designator};
+	$entry->{type} = 'audio';
+	$entry->{file} = $file;
+        $entry->{url}  = app->defaults->{audio_url};
+        $entry->{start} = time();
+	#app->log->info('entry' . dumper($entry));
+        #$detail = {
+        #    type       => 'audio',
+            #freq       => $freq,
+        #    file       => $file,
+	#    count      => ++$freq_list->{$freq}{count},
+        #    url        => app->defaults->{audio_url},
+        #    start      => time(),
+            #designator => $designator,
+        #};
 
-        app->defaults( state => $detail );
+        app->defaults( state => $entry );
         #app->log->debug( app->dumper($detail) );
 
         # start timer to stop open mic/long data
         $xmit_timer = Mojo::IOLoop->timer(
             10 => sub {
                 my $loop = shift;
-                app->update_pass( $freq, $designator, AUTO_PASS );
+                app->update_pass( $freq, $entry->{bank}, AUTO_PASS );
                 app->log->debug(
-                    sprintf( 'Set pass on %s (%s)', $freq, $designator ) );
+                    sprintf( 'Set pass on %s (%s)', $freq, $entry->{label} ) );
                 $c->start_rtlfm;
             }
         );
     }
     else {
         Mojo::IOLoop->remove($xmit_timer);
-        $detail = app->defaults('state');
-        $detail->{end} = time();
-        app->defaults( state => $detail );
-	app->publish( $detail );
+        $entry = app->defaults('state');
+        $entry->{end} = time();
+	# increment DB count
+	++$entry->{count};
+	app->update_count($entry);
+        app->defaults( state => $entry );
+	app->publish( $entry );
     }
 
 };
 
 helper load_freqs => sub {
 
-    my @freqs = @{ app->select( $config->{group} ) };
+    my @freqs;
+    foreach my $bank ( @{ $config->{banks} } ) {
 
-    my %freq_list;
-    foreach my $freq_detail (@freqs) {
-        my $freq = $freq_detail->[FREQ] += 0;  # remove trailing zeros
-        chomp($freq);
-        $freq_list{$freq} = {
-            designator => $freq_detail->[DESIGNATOR],
-            pass       => $freq_detail->[PASS]
-        };
+        push @freqs,  @{ app->select( $bank ) };
+
     }
 
-    app->defaults( freq_list => \%freq_list );
+    #app->log->info(dumper(@freqs));
+
+    app->defaults( freq_list => \@freqs );
 
 };
 
@@ -244,12 +262,12 @@ helper start_rtlfm => sub {
 
     #my @freqs = @{ app->select( $config->{group} ) };
 
-    my %freqs = %{ app->defaults->{freq_list} };
+    my @freqs = @{ app->defaults->{freq_list} };
     my @freq_args;
-    foreach my $freq ( sort keys %freqs ) {
+    foreach my $entry ( @freqs ) {
 
-	if ($freqs{$freq}{pass} == NO_PASS ) {
-             push @freq_args, sprintf( "-f %sM", $freq );
+	if ($entry->{pass} == NO_PASS ) {
+             push @freq_args, sprintf( "-f %sM", $entry->{freq} );
         }
 
     }
@@ -382,9 +400,9 @@ scanner_page = function () {
     $.getJSON( '<%= url_for('freqs')->to_abs %>' )
         .done(function( json ) {
    	    $('#scanner').empty().append('<ul data-role="listview" id="frequencies"></ol>');
-	    $.each( json, function(freq, detail) {
+	    $.each( json, function(i, detail) {
 
-                var info = freq.toString();
+                var info = detail.freq.toString();
                 if (detail.count) { info += ' / ' + detail.count + ' hits' }
                 switch (detail.pass) {
                     case 1:
@@ -394,15 +412,15 @@ scanner_page = function () {
                         info += ' / Auto Pass';
                         break;
                 }
-                var contents = '<h2>' + detail.designator + '</h2><p>' + 
+                var contents = '<h2>' + detail.label + '</h2><p>' + 
                                info + '</p>';
 
 		$('<li/>')
 		    .append(
 		  	$('<a/>', {
 			    html: contents,
-			    href: "#" + freq,
-                            id: freq
+			    href: "#" + detail.freq,
+                            id: detail.freq + '-' + detail.bank
 			})
 			).appendTo("#frequencies");
 
@@ -413,8 +431,13 @@ scanner_page = function () {
             $('#frequencies').listview().listview('refresh');
 
             $( '#frequencies li a' ).on( "taphold", function( event ) {
-                var freq = $( this ).attr('id');
-                frequency_config(freq, json[freq]);
+                var id = $( this ).attr('id');
+
+                var entry = $.grep(json, function(obj) {
+                    return id == obj.freq + '-' + obj.bank;
+                });
+
+                frequency_config(entry[0]);
             });
 
         });  // end .done
@@ -422,7 +445,7 @@ scanner_page = function () {
 
 };
 
-frequency_config = function(freq, detail) {
+frequency_config = function(entry) {
 
     var choices = [ 'none', 'manual', 'auto' ];
 
@@ -436,7 +459,7 @@ frequency_config = function(freq, detail) {
     });
 
     $("<h2/>", {
-        text : detail.designator + '(' + freq + ')'
+        text : entry.label + ' (' + entry.freq + ')'
     }).appendTo($config);
 
     //create a form for the pop up
@@ -474,12 +497,12 @@ frequency_config = function(freq, detail) {
     }).bind("click", function() {
         $config.popup("close");
         var new_pass = $('input[name=pass-choice]:checked').val();
-        if ( detail.pass != new_pass ) {
+        if ( entry.pass != new_pass ) {
 
             scan_ws.send(JSON.stringify( { 
                 type: "set_pass",
-                freq: freq,
-                designator: detail.designator,
+                freq: entry.freq,
+                bank: entry.bank,
                 pass: new_pass
             } ));
 
@@ -496,7 +519,7 @@ frequency_config = function(freq, detail) {
         $config.popup('close');
     }).appendTo($config);
 
-    $('#pass-choice-'+choices[detail.pass]).attr('checked', true);
+    $('#pass-choice-'+choices[entry.pass]).attr('checked', true);
 
     $config.popup("open").trigger("create");
 
