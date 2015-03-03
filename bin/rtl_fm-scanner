@@ -139,6 +139,7 @@ helper select => sub {
     my ( $self, $group ) = @_;
 
     # TODO:  At some point limit based on current year or something.
+    # TODO:  Sort by designator
     my $sth =
       eval { $self->db->prepare('SELECT * FROM freqs where groups like ?'); }
       || return undef;
@@ -154,6 +155,9 @@ helper update_pass => sub {
     }
       || return undef;
     $sth->execute( $pass, $freq, $designator );
+
+    app->load_freqs;
+    app->publish( { type => 'update' } ); # what freqs are available
     #app->log->info( sprintf('|%s|%s|%s|', $pass, $freq, $designator) );
 };
 
@@ -200,6 +204,24 @@ helper set_state => sub {
 
 };
 
+helper load_freqs => sub {
+
+    my @freqs = @{ app->select( $config->{group} ) };
+
+    my %freq_list;
+    foreach my $freq_detail (@freqs) {
+        my $freq = $freq_detail->[FREQ] += 0;  # remove trailing zeros
+        chomp($freq);
+        $freq_list{$freq} = {
+            designator => $freq_detail->[DESIGNATOR],
+            pass       => $freq_detail->[PASS]
+        };
+    }
+
+    app->defaults( freq_list => \%freq_list );
+
+};
+
 helper start_rtlfm => sub {
     my $c = shift;
 
@@ -220,28 +242,19 @@ helper start_rtlfm => sub {
 
     app->log->info('about to start rtl_fm');
 
-    my @freqs = @{ app->select( $config->{group} ) };
+    #my @freqs = @{ app->select( $config->{group} ) };
 
-    app->publish( { type => 'update' } );  # if start of rtl_fm expect change
-    #app->log->info('database dump'.dumper(@freqs));
-
+    my %freqs = %{ app->defaults->{freq_list} };
     my @freq_args;
-    my %freq_list;
-    foreach my $freq_detail (@freqs) {
-        my $freq = $freq_detail->[FREQ] += 0;  # remove trailing zeros
-        chomp($freq);
-        $freq_list{$freq} = {
-            designator => $freq_detail->[DESIGNATOR],
-            pass       => $freq_detail->[PASS]
-        };
+    foreach my $freq ( sort keys %freqs ) {
 
-        if ( $freq_detail->[PASS] == NO_PASS ) {
-            push @freq_args, sprintf( "-f %sM", $freq );
+	if ($freqs{$freq}{pass} == NO_PASS ) {
+             push @freq_args, sprintf( "-f %sM", $freq );
         }
+
     }
 
-    app->defaults( freq_list => \%freq_list );
-
+    #app->log->info('freqs'.dumper(@freq_args));
     #app->log->debug(dumper(app->defaults->{freq_list}));
 
     my @args = ( '/usr/local/bin/rtl_fm',
@@ -319,6 +332,8 @@ helper start_rtlfm => sub {
     $stream_in->on( finish => sub { Mojo::IOLoop->remove($sid) } );
 
 };
+
+app->load_freqs;
 
 app->start_rtlfm;
 
