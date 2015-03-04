@@ -195,6 +195,7 @@ helper set_state => sub {
             10 => sub {
                 my $loop = shift;
                 app->update_pass( $freq, $entry->{bank}, AUTO_PASS );
+	        app->publish( $entry );  # for testing let client know
                 $c->start_rtlfm;
             }
         );
