@@ -19,7 +19,8 @@ app->secrets( ['Specfying a secret to make the reminder go away.'] );
 my $dbname = '../data/freqs.db';
 
 my $xmit_timer;      # stores the id of the loop that limits length of xmit
-app->defaults( state => () );
+my $state = {};
+#app->defaults( state => () );
 
 get '/self' => sub {
     my $c = shift;
@@ -173,36 +174,39 @@ helper update_count => sub {
 helper set_state => sub {
     my ( $c, $status, $freq, $file ) = @_;
 
-    my $entry;
+    #my $entry;
     if ( $status eq 'OPEN' ) {
         my @freq_list  = @{ app->defaults('freq_list') };
-	($entry) = grep { $_->{freq} == $freq } @freq_list;
-	$entry->{type} = 'audio';
-	$entry->{file} = $file;
-        $entry->{url}  = app->defaults->{audio_url};
-        $entry->{start} = time();
+	(my $entry) = grep { $_->{freq} == $freq } @freq_list;
+	$state->{$file} = $entry;
+	$state->{$file}->{type} = 'audio';
+	$state->{$file}->{file} = $file;
+        $state->{$file}->{url}  = app->defaults->{audio_url};
+        $state->{$file}->{start} = time();
+        $state->{$file}->{end} = 'none yet';
 
-        app->defaults( state => $entry );
+        #app->defaults( state => $entry );
         #app->log->debug( app->dumper($detail) );
 
         # start timer to stop open mic/long data
         $xmit_timer = Mojo::IOLoop->timer(
             10 => sub {
                 my $loop = shift;
-                app->update_pass( $freq, $entry->{bank}, AUTO_PASS );
-	        app->publish( $entry );  # for testing let client know
+                app->update_pass( $freq, $state->{$file}->{bank}, AUTO_PASS );
+	        app->publish( $state->{$file} );  # for testing let client know
+		delete $state->{$file};
                 $c->start_rtlfm;
             }
         );
     }
     else {
         Mojo::IOLoop->remove($xmit_timer);
-        $entry = app->defaults('state');
-        $entry->{end} = time();
-	++$entry->{count};
-	app->update_count($entry);
-        app->defaults( state => $entry );
-	app->publish( $entry );
+        $state->{$file}->{end} = time();
+	my $count = $state->{$file}->{count};
+	$state->{$file}->{count} = ++$count;
+	app->update_count($state->{$file});
+	app->publish( $state->{$file} );
+        delete $state->{$file};
     }
 
 };
