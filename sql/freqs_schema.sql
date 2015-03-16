@@ -1,16 +1,17 @@
-create table freqs (
-        frequency varchar(10) not null,
-	designator varchar(50),
-	groups varchar(50),
-	source varchar(10) not null,
-	time date,
+CREATE TABLE freqs (
+        freq real not null,
+        label varchar(50),
+        bank varchar(50),
+        source varchar(10) not null,
+        entered date,
         lat real,
-	long real,
-	pass integer default 0,
-	unique (frequency,designator)
+        long real,
+        pass integer default 0,
+        count integer default 0,
+        unique (freq,bank)
 );
 
-create trigger insert_add_time after insert on freqs
+CREATE TRIGGER insert_add_time after insert on freqs
 begin
-    update freqs set time = datetime('NOW')  where rowid = new.rowid;
+    update freqs set entered = datetime('NOW')  where rowid = new.rowid;
 end;
