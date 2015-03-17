@@ -3,6 +3,7 @@
 use Mojolicious::Lite;
 use Mojo::IOLoop;
 use Mojo::Util qw(dumper);
+use Mojo::Log;
 use DBIx::Connector;
 
 use constant NO_PASS     => 0;
@@ -10,6 +11,8 @@ use constant MANUAL_PASS => 1;
 use constant AUTO_PASS   => 2;
 
 my $config = plugin Config => { file => '../config/scanner.conf' };
+
+app->log(Mojo::Log->new(path => '../log/rtl_fm-scanner.log'));
 
 app->plugin('RenderFile');
 app->plugin('CORS'); # lets the client get around same origin policy restriction
