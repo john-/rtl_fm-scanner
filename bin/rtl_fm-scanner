@@ -16,6 +16,7 @@ app->log(Mojo::Log->new(path => '../log/rtl_fm-scanner.log'));
 
 app->plugin('RenderFile');
 app->plugin('CORS'); # lets the client get around same origin policy restriction
+plugin 'Mojolicious::Plugin::ForkCall';
 
 app->secrets( ['Specfying a secret to make the reminder go away.'] );
 
@@ -234,10 +235,24 @@ helper set_state => sub {
 	my $count = $state->{$file}->{count};
 	$state->{$file}->{count} = ++$count;
 	app->update_count($state->{$file});
-	app->publish( $state->{$file} );
-        delete $state->{$file};
-    }
+	# convert file to sample rate chrome supports
 
+        $c->fork_call(
+            sub {
+		$state->{$file}->{file} =~ s/.wav/.ogg/;
+	        my @args = ( 'sox', $file, '-r', '44100', '-c', '2', $state->{$file}->{file});
+		system(@args);
+	        return @args;
+            },
+            sub {
+	        my ($c, @stuff) = @_;
+		#$state->{$file}->{file} = $stuff[6];
+	        app->publish( $state->{$file} );
+                delete $state->{$file};
+		app->log->info("finished converting: @stuff");
+            }
+        );
+    }
 };
 
 helper load_freqs => sub {
