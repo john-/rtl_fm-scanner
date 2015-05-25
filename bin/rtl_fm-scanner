@@ -210,7 +210,8 @@ helper set_state => sub {
 	(my $entry) = grep { $_->{freq} == $freq } @freq_list;
 	$state->{$file} = $entry;
 	$state->{$file}->{type} = 'audio';
-	$state->{$file}->{file} = $file;
+	$state->{$file}->{file_preconv} = $file;
+	($state->{$file}->{file} = $file) =~ s/.wav/.ogg/;
         $state->{$file}->{url}  = app->defaults->{audio_url};
         $state->{$file}->{start} = time();
         $state->{$file}->{end} = 'none yet';
@@ -235,18 +236,18 @@ helper set_state => sub {
 	my $count = $state->{$file}->{count};
 	$state->{$file}->{count} = ++$count;
 	app->update_count($state->{$file});
-	# convert file to sample rate chrome supports
 
+	# convert file to sample rate chrome supports
         $c->fork_call(
             sub {
-		$state->{$file}->{file} =~ s/.wav/.ogg/;
-	        my @args = ( 'sox', $file, '-r', '44100', '-c', '2', $state->{$file}->{file});
+		#$state->{$file}->{file} =~ s/.wav/.ogg/;
+	        my @args = ( 'sox', $state->{$file}->{file_preconv}, 
+                                 '-r', '44100', '-c', '2', $state->{$file}->{file});
 		system(@args);
 	        return @args;
             },
             sub {
 	        my ($c, @stuff) = @_;
-		#$state->{$file}->{file} = $stuff[6];
 	        app->publish( $state->{$file} );
                 delete $state->{$file};
 		app->log->info("finished converting: @stuff");
