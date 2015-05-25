@@ -83,6 +83,10 @@ websocket '/output' => sub {
             } elsif ( $hash->{type} eq 'set_pass' ) {
                 app->update_pass( $hash->{freq}, $hash->{bank}, $hash->{pass} );
                 $c->start_rtlfm;
+            } elsif ( $hash->{type} eq 'clear_auto_pass' ) {
+		app->log->debug('about to clear auto pass');
+                app->clear_auto_pass;
+                $c->start_rtlfm;
             }
             elsif ( $hash->{type} eq 'set_squelch' ) {
                 $config->{squelch} = $hash->{squelch};
@@ -162,6 +166,28 @@ helper update_pass => sub {
     app->publish( { type => 'update' } ); # what freqs are available
     #app->log->info( sprintf('|%s|%s|%s|', $pass, $freq, $label) );
 };
+
+helper clear_auto_pass => sub {
+    my $self = shift;
+
+    app->log->info(
+        sprintf( 'clearing auto pass for all frequencies' ) );
+
+    foreach my $bank ( @{ $config->{banks} } ) {
+        my $sth = eval {
+            $self->db->prepare(
+                'UPDATE freqs SET pass=0 WHERE pass=2 AND bank=?');
+        }
+          || return undef;
+        $sth->execute( $bank );
+
+    }
+
+    app->load_freqs;
+    app->publish( { type => 'update' } ); # what freqs are available
+    #app->log->info( sprintf('|%s|%s|%s|', $pass, $freq, $label) );
+};
+
 
 helper update_count => sub {
     my ( $self, $entry ) = @_;
@@ -261,6 +287,7 @@ helper start_rtlfm => sub {
 		 '-M', $config->{mode},
 		 '-p', $config->{ppm},
 		 '-s', '12k',
+#		 '-r', '44100',
 		 '-l', $config->{squelch},
 		 '-g', $config->{gain},
 		 '-E', 'wav',
@@ -539,8 +566,16 @@ scanner_config = function() {
         value : scan_config.squelch,
         min : '0',
         max : '100'
+    }))
+    .append($('<label>', {
+        for : 'clear_pass',
+        text : 'Clear Auto Pass',
+    }))
+    .append($('<input/>', {
+        type : 'checkbox',
+        name : 'clear_pass',
+        id   : 'clear_pass'
     })).appendTo($config);
-
    //Create a submit button(fake)
     $("<a>", {
         text : "OK"
@@ -569,7 +604,11 @@ scanner_config = function() {
 check_for_changes = function() {
 
     if ( $('#squelch').val() != scan_config.squelch ) {
-        scan_ws.send(JSON.stringify( { type: "set_squelch", squelch: $('#squelch').val() } ));         }
+        scan_ws.send(JSON.stringify( { type: "set_squelch", squelch: $('#squelch').val() } ));
+    }
 
+    if($('#clear_pass').prop('checked')) {
+        scan_ws.send(JSON.stringify( { type: "clear_auto_pass" } ));
+    }
 };
 
