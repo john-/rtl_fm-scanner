@@ -6,6 +6,11 @@ use Mojo::Util qw(dumper);
 use Mojo::Log;
 use DBIx::Connector;
 
+use FindBin qw($Bin);
+use lib "$Bin/../lib";
+
+use Transmission;
+
 use constant NO_PASS     => 0;
 use constant MANUAL_PASS => 1;
 use constant AUTO_PASS   => 2;
@@ -16,14 +21,15 @@ app->log(Mojo::Log->new(path => '../log/rtl_fm-scanner.log'));
 
 app->plugin('RenderFile');
 app->plugin('CORS'); # lets the client get around same origin policy restriction
-plugin 'Mojolicious::Plugin::ForkCall';
+#plugin 'Mojolicious::Plugin::ForkCall';
 
 app->secrets( ['Specfying a secret to make the reminder go away.'] );
 
 my $dbname = '../data/freqs.db';
 
-my $xmit_timer;      # stores the id of the loop that limits length of xmit
-my $state = {};
+#my $xmit_timer;      # stores the id of the loop that limits length of xmit
+my $xmit;             # design handles one transmission at a time
+#my $state = {};
 #app->defaults( state => () );
 
 get '/self' => sub {
@@ -83,7 +89,7 @@ websocket '/output' => sub {
 		app->log->debug('client pinged me');
             } elsif ( $hash->{type} eq 'set_pass' ) {
                 app->update_pass( $hash->{freq}, $hash->{bank}, $hash->{pass} );
-                $c->start_rtlfm;
+                #$c->start_rtlfm;
             } elsif ( $hash->{type} eq 'clear_auto_pass' ) {
 		app->log->debug('about to clear auto pass');
                 app->clear_auto_pass;
@@ -153,7 +159,7 @@ helper update_pass => sub {
     my ( $self, $freq, $bank, $pass ) = @_;
 
     app->log->info(
-        sprintf( 'change pass for %s to %s', $freq, $pass ) );
+        sprintf( 'change pass for %s (%s) to %s', $freq, $bank, $pass ) );
 
 
     my $sth = eval {
@@ -166,6 +172,7 @@ helper update_pass => sub {
     app->load_freqs;
     app->publish( { type => 'update' } ); # what freqs are available
     #app->log->info( sprintf('|%s|%s|%s|', $pass, $freq, $label) );
+    $self->start_rtlfm;
 };
 
 helper clear_auto_pass => sub {
@@ -191,70 +198,77 @@ helper clear_auto_pass => sub {
 
 
 helper update_count => sub {
-    my ( $self, $entry ) = @_;
+    my ( $self, $freq, $bank, $count ) = @_;
+    app->log->debug("updating count  $freq  $bank  $count");
     my $sth = eval {
         $self->db->prepare(
             'UPDATE freqs SET count=? WHERE freq = ? AND bank = ?');
     }
       || return undef;
-    $sth->execute( $entry->{count}, $entry->{freq}, $entry->{bank} );
+    $sth->execute( $count, $freq, $bank );
 };
 
 
-helper set_state => sub {
-    my ( $c, $status, $freq, $file ) = @_;
+#helper set_state => sub {
+#    my ( $c, $status, $freq, $file ) = @_;
 
     #my $entry;
-    if ( $status eq 'OPEN' ) {
-        my @freq_list  = @{ app->defaults('freq_list') };
-	(my $entry) = grep { $_->{freq} == $freq } @freq_list;
-	$state->{$file} = $entry;
-	$state->{$file}->{type} = 'audio';
-	$state->{$file}->{file_preconv} = $file;
-	($state->{$file}->{file} = $file) =~ s/.wav/.ogg/;
-        $state->{$file}->{url}  = app->defaults->{audio_url};
-        $state->{$file}->{start} = time();
-        $state->{$file}->{end} = 'none yet';
+ #   if ( $status eq 'OPEN' ) {
+#        my @freq_list  = @{ app->defaults('freq_list') };
+#	(my $entry) = grep { $_->{freq} == $freq } @freq_list;
+#	$state->{$file} = $entry;
+#	$state->{$file}->{type} = 'audio';
+#	$state->{$file}->{file_preconv} = $file;
+#	($state->{$file}->{file} = $file) =~ s/.wav/.ogg/;
+#        $state->{$file}->{url}  = app->defaults->{audio_url};
+#        $state->{$file}->{start} = time();
+#        $state->{$file}->{end} = 'none yet';
 
-        #app->defaults( state => $entry );
         #app->log->debug( app->dumper($detail) );
 
         # start timer to stop open mic/long data
-        $xmit_timer = Mojo::IOLoop->timer(
-            10 => sub {
-                my $loop = shift;
-                app->update_pass( $freq, $state->{$file}->{bank}, AUTO_PASS );
-	        app->publish( $state->{$file} );  # for testing let client know
-		delete $state->{$file};
-                $c->start_rtlfm;
-            }
-        );
-    }
-    else {
-        Mojo::IOLoop->remove($xmit_timer);
-        $state->{$file}->{end} = time();
-	my $count = $state->{$file}->{count};
-	$state->{$file}->{count} = ++$count;
-	app->update_count($state->{$file});
+#        $xmit_timer = Mojo::IOLoop->timer(
+#            10 => sub {
+#                my $loop = shift;
+#                app->update_pass( $freq, $state->{$file}->{bank}, AUTO_PASS );
+#	        app->publish( $state->{$file} );  # for testing let client know
+#		delete $state->{$file};
+#                $c->start_rtlfm;
+#            }
+#        );
+#    }
+#    else {
+#        Mojo::IOLoop->remove($xmit_timer);
+#	if (!exists $state->{$file}) {
+#	    app->log->error('Skipping possible short clip');
+	    #return;
+#        }
+#        $state->{$file}->{end} = time();
+#	if ($state->{$file}->{end} - $state->{$file}->{start} == 0) {
+#	    app->log->debug('Skipping short clip');
+#	    #return;
+#        }
+#	my $count = $state->{$file}->{count};
+#	$state->{$file}->{count} = ++$count;
+#	app->update_count($state->{$file});
 
 	# convert file to sample rate chrome supports
-        $c->fork_call(
-            sub {
-		#$state->{$file}->{file} =~ s/.wav/.ogg/;
-	        my @args = ( 'sox', $state->{$file}->{file_preconv}, 
-                                 '-r', '44100', '-c', '2', $state->{$file}->{file});
-		system(@args);
-	        return @args;
-            },
-            sub {
-	        my ($c, @stuff) = @_;
-	        app->publish( $state->{$file} );
-                delete $state->{$file};
-		app->log->info("finished converting: @stuff");
-            }
-        );
-    }
-};
+#        $c->fork_call(
+#            sub {
+#	        my @args = ( 'sox', $state->{$file}->{file_preconv}, 
+#                                 '-r', '44100', '-c', '2', $state->{$file}->{file});
+#		system(@args);
+#	        return @args;
+#            },
+#            sub {
+#	        my ($c, @stuff) = @_;
+#		app->log->info("sox done: $state->{file}");
+#	        app->publish( $state->{$file} );
+#                delete $state->{$file};
+#            }
+#        );
+#    }
+#};
 
 helper load_freqs => sub {
 
@@ -306,7 +320,7 @@ helper start_rtlfm => sub {
 #		 '-r', '44100',
 		 '-l', $config->{squelch},
 		 '-g', $config->{gain},
-		 '-E', 'wav',
+#		 '-E', 'wav',
 		 @freq_args,
 		 '-n', '../archive',
 		 '/tmp/ignored.out'
@@ -334,7 +348,14 @@ helper start_rtlfm => sub {
                 my $status   = $1;
                 my $cur_freq = $2 / 1000000;
                 my $file     = $3;
-                app->set_state( $status, $cur_freq, $file );
+
+		if ($status eq 'OPEN') {
+		    $xmit = Transmission->new(app, $cur_freq, $file);
+                } else {
+		    $xmit->close;
+		}
+
+                #app->set_state( $status, $cur_freq, $file );
                 app->log->info(
                     sprintf(
                         'status: %s freq: %s file: %s',
