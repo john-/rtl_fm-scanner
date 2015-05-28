@@ -200,6 +200,16 @@ helper clear_auto_pass => sub {
 helper update_count => sub {
     my ( $self, $freq, $bank, $count ) = @_;
     app->log->debug("updating count  $freq  $bank  $count");
+
+    my @freqs = @{ app->defaults->{freq_list} };
+    foreach my $entry ( @freqs ) {
+
+	if ( ($entry->{freq} == $freq) && ($entry->{bank} eq $bank) ) {
+            $entry->{count} = $count;
+        }
+
+    }
+
     my $sth = eval {
         $self->db->prepare(
             'UPDATE freqs SET count=? WHERE freq = ? AND bank = ?');

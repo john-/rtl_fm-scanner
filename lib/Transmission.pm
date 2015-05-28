@@ -80,7 +80,7 @@ sub close {
     my $count = $self->{count};
     $self->{count} = ++$count;
     $self->{app}->update_count( $self->{freq}, $self->{bank}, $self->{count} );
-    
+
     $self->{app}->log->info(sprintf('transmission closed (%s)', $self->{source_file}));
 
     # convert file to sample rate chrome supports
