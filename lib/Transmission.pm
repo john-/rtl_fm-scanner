@@ -71,9 +71,8 @@ sub close {
 
     $self->{end} = time();
 
-    if ($self->{end} - $self->{start} <= 1) {
-	$self->{app}->log->info(sprintf('Throwing away short transmission (%s)',
-					$self->{source_file}));
+    if ($self->{end} - $self->{start} <= 0) {
+	$self->{app}->log->info(sprintf('Throwing away short transmission'));
 	return;
     }
 
@@ -81,7 +80,7 @@ sub close {
     $self->{count} = ++$count;
     $self->{app}->update_count( $self->{freq}, $self->{bank}, $self->{count} );
 
-    $self->{app}->log->info(sprintf('transmission closed (%s)', $self->{source_file}));
+    $self->{app}->log->info(sprintf('transmission closed'));
 
     # convert file to sample rate chrome supports
 

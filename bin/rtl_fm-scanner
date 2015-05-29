@@ -359,6 +359,13 @@ helper start_rtlfm => sub {
                 my $cur_freq = $2 / 1000000;
                 my $file     = $3;
 
+                app->log->info(
+                    sprintf(
+                        'status: %s freq: %s file: %s',
+                        $status, $cur_freq, $file
+                    )
+                );
+
 		if ($status eq 'OPEN') {
 		    $xmit = Transmission->new(app, $cur_freq, $file);
                 } else {
@@ -366,12 +373,6 @@ helper start_rtlfm => sub {
 		}
 
                 #app->set_state( $status, $cur_freq, $file );
-                app->log->info(
-                    sprintf(
-                        'status: %s freq: %s file: %s',
-                        $status, $cur_freq, $file
-                    )
-                );
             }
             elsif ( $bytes =~ /No supported devices found/ ) {
                 app->log->error('No dongle connected!');
