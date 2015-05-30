@@ -1,0 +1,21 @@
+freqs_schema.sql is sqlite based table for frequency list.
+
+sudo su - postgres
+psql -d cart
+
+load pipe delimited data:
+
+copy freqs (freq, label, bank, source) from '/home/pub/rtl_fm-scanner/data/freqs_dump.txt' with delimiter '|';
+
+Steps towards grouping:
+
+select * from freqs left outer join xmit_history on freqs.freq_key = xmit_history.freq_key;
+
+select label, count(xmit_key) from freqs left outer join xmit_history on freqs.freq_key = xmit_history.freq_key group by label;
+
+select freqs.freq_key, label, count(xmit_key) from freqs left outer join xmit_history on freqs.freq_key = xmit_history.freq_key group by freqs.freq_key, freqs.label;
+
+select freqs.freq_key, label, count(xmit_key) from freqs left outer join xmit_history on freqs.freq_key = xmit_history.freq_key where bank = 'ATC' group by freqs.freq_key, freqs.label;
+
+select freqs.freq_key, freq, label, bank, pass, count(xmit_key) from freqs left outer join xmit_history on freqs.freq_key = xmit_history.freq_key where bank = 'ATC' group by freqs.freq_key, freqs.label;
+
