@@ -6,13 +6,6 @@ use constant NO_PASS     => 0;
 use constant MANUAL_PASS => 1;
 use constant AUTO_PASS   => 2;
 use Mojo::IOLoop::ForkCall;
-#use Mojolicious::Plugins;
-#use Mojolicious::Lite;
-#use Mojo::Base 'Mojolicious::Plugin';
-
-#my $plugins = Mojolicious::Plugins->new;
-#my $plugin = $plugins->load_plugin('Mojolicious::Plugin::ForkCall');
-#plugin 'Mojolicious::Plugin::ForkCall';
 
 sub new {
     my ($class, $app, $freq, $source) = @_;
@@ -69,16 +62,16 @@ sub close {
     # stop autopass timer
     Mojo::IOLoop->remove($self->{timer});
 
-    $self->{end} = time();
+    $self->{stop} = time();
 
-    if ($self->{end} - $self->{start} <= 0) {
+    if ($self->{stop} - $self->{start} <= 0) {
 	$self->{app}->log->info(sprintf('Throwing away short transmission'));
 	return;
     }
 
-    my $count = $self->{count};
-    $self->{count} = ++$count;
-    $self->{app}->update_count( $self->{freq}, $self->{bank}, $self->{count} );
+    #my $count = $self->{count};
+    #$self->{count} = ++$count;
+    #$self->{app}->update_count( $self->{freq}, $self->{bank}, $self->{count} );
 
     $self->{app}->log->info(sprintf('transmission closed'));
 
@@ -96,15 +89,38 @@ sub close {
         sub {
             my ($c, @stuff) = @_;
             $self->{app}->log->info("sox done: $self->{file}");
-	    my %smaller = %$self;
-	    delete $smaller{app};
-	    delete $smaller{timer};
-	    #$self->{app}->log->debug(keys %$self);
-            $self->{app}->publish( \%smaller );
-            #delete $state->{$file};
+
+	    # internal tracking of count (sent with audio message)
+            my $count = $self->{count};
+            $self->{count} = ++$count;
+
+	    # update count that is sent with /freq url
+	    my @freqs = @{ $self->{app}->defaults->{freq_list} };
+	    foreach my $entry ( @freqs ) {
+
+                if ( ($entry->{freq} == $self->{freq}) && ($entry->{bank} eq $self->{bank}) ) {
+	            $entry->{count} = $count;
+	       }
+
+            }
+
+            $self->{app}->publish( $self->neuter_self );
+
+	    $self->{app}->pg->db->query('INSERT INTO xmit_history (freq_key, source, start, stop) values (?, ?, to_timestamp(?), to_timestamp(?))',
+			      $self->{freq_key}, 'dongle1', $self->{start}, $self->{stop});
         }
     );
 
+}
+
+sub neuter_self {
+    my $self = shift;
+
+    my %msg = %$self;
+    delete $msg{app};
+    delete $msg{timer};
+    #$self->{app}->log->debug(keys %$self);
+    return \%msg;
 }
 
 1;

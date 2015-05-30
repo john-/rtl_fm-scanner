@@ -4,7 +4,8 @@ use Mojolicious::Lite;
 use Mojo::IOLoop;
 use Mojo::Util qw(dumper);
 use Mojo::Log;
-use DBIx::Connector;
+use Mojo::Pg;
+#use DBIx::Connector;
 
 use FindBin qw($Bin);
 use lib "$Bin/../lib";
@@ -17,20 +18,19 @@ use constant AUTO_PASS   => 2;
 
 my $config = plugin Config => { file => '../config/scanner.conf' };
 
+#my $pg = Mojo::Pg->new('postgresql://script@/cart');
+#my $db = $pg->db;
+
 app->log(Mojo::Log->new(path => '../log/rtl_fm-scanner.log'));
 
 app->plugin('RenderFile');
 app->plugin('CORS'); # lets the client get around same origin policy restriction
-#plugin 'Mojolicious::Plugin::ForkCall';
 
 app->secrets( ['Specfying a secret to make the reminder go away.'] );
 
-my $dbname = '../data/freqs.db';
+#my $dbname = '../data/freqs.db';
 
-#my $xmit_timer;      # stores the id of the loop that limits length of xmit
 my $xmit;             # design handles one transmission at a time
-#my $state = {};
-#app->defaults( state => () );
 
 get '/self' => sub {
     my $c = shift;
@@ -135,24 +135,22 @@ helper config_msg => sub {
 };
 
 
-helper connector => sub {
-    state $db = DBIx::Connector->new( "dbi:SQLite:$dbname", "", "" )
+helper pg => sub {
+    state $pg = Mojo::Pg->new('postgresql://script@/cart')
       or app->log->error('Could not connect to database');
 };
 
-helper db => sub { shift->connector->dbh };
-
 helper select => sub {
-    my ( $self, $group ) = @_;
+    my ( $self, $bank ) = @_;
+
+    #my $db = $self->pg->db;
 
     # TODO:  At some point limit based on current year or something.
-    # TODO:  Sort by designator
-    my $sth =
-      eval { $self->db->prepare(
-          'select * from freqs where bank like ? order by label'); }
-      || return undef;
-    $sth->execute($group);
-    return $sth->fetchall_arrayref({});
+    my $results = $self->pg->db->query('select freqs.freq_key, freq, label, bank, pass, count(xmit_key) from freqs left outer join xmit_history on freqs.freq_key = xmit_history.freq_key where bank = ? group by freqs.freq_key, freqs.label',
+                                         $bank)->hashes->to_array;
+    #my $results = $self->pg->db->query('select * from freqs where bank = ? order by label',
+    #                                     $group)->hashes->to_array;
+    return $results;
 };
 
 helper update_pass => sub {
@@ -161,13 +159,8 @@ helper update_pass => sub {
     app->log->info(
         sprintf( 'change pass for %s (%s) to %s', $freq, $bank, $pass ) );
 
-
-    my $sth = eval {
-        $self->db->prepare(
-            'UPDATE freqs SET pass=? WHERE freq = ? AND bank = ?');
-    }
-      || return undef;
-    $sth->execute( $pass, $freq, $bank );
+    $self->pg->db->query('UPDATE freqs SET pass=? WHERE freq = ? AND bank = ?',
+                         $pass, $freq, $bank);
 
     app->load_freqs;
     app->publish( { type => 'update' } ); # what freqs are available
@@ -181,104 +174,16 @@ helper clear_auto_pass => sub {
     app->log->info(
         sprintf( 'clearing auto pass for all frequencies' ) );
 
-    foreach my $bank ( @{ $config->{banks} } ) {
-        my $sth = eval {
-            $self->db->prepare(
-                'UPDATE freqs SET pass=0 WHERE pass=2 AND bank=?');
-        }
-          || return undef;
-        $sth->execute( $bank );
+    my $db = $self->pg->db;
 
+    foreach my $bank ( @{ $config->{banks} } ) {
+	$db->query('UPDATE freqs SET pass=0 WHERE pass=2 AND bank=?', $bank);
     }
 
     app->load_freqs;
     app->publish( { type => 'update' } ); # what freqs are available
     #app->log->info( sprintf('|%s|%s|%s|', $pass, $freq, $label) );
 };
-
-
-helper update_count => sub {
-    my ( $self, $freq, $bank, $count ) = @_;
-    app->log->debug("updating count  $freq  $bank  $count");
-
-    my @freqs = @{ app->defaults->{freq_list} };
-    foreach my $entry ( @freqs ) {
-
-	if ( ($entry->{freq} == $freq) && ($entry->{bank} eq $bank) ) {
-            $entry->{count} = $count;
-        }
-
-    }
-
-    my $sth = eval {
-        $self->db->prepare(
-            'UPDATE freqs SET count=? WHERE freq = ? AND bank = ?');
-    }
-      || return undef;
-    $sth->execute( $count, $freq, $bank );
-};
-
-
-#helper set_state => sub {
-#    my ( $c, $status, $freq, $file ) = @_;
-
-    #my $entry;
- #   if ( $status eq 'OPEN' ) {
-#        my @freq_list  = @{ app->defaults('freq_list') };
-#	(my $entry) = grep { $_->{freq} == $freq } @freq_list;
-#	$state->{$file} = $entry;
-#	$state->{$file}->{type} = 'audio';
-#	$state->{$file}->{file_preconv} = $file;
-#	($state->{$file}->{file} = $file) =~ s/.wav/.ogg/;
-#        $state->{$file}->{url}  = app->defaults->{audio_url};
-#        $state->{$file}->{start} = time();
-#        $state->{$file}->{end} = 'none yet';
-
-        #app->log->debug( app->dumper($detail) );
-
-        # start timer to stop open mic/long data
-#        $xmit_timer = Mojo::IOLoop->timer(
-#            10 => sub {
-#                my $loop = shift;
-#                app->update_pass( $freq, $state->{$file}->{bank}, AUTO_PASS );
-#	        app->publish( $state->{$file} );  # for testing let client know
-#		delete $state->{$file};
-#                $c->start_rtlfm;
-#            }
-#        );
-#    }
-#    else {
-#        Mojo::IOLoop->remove($xmit_timer);
-#	if (!exists $state->{$file}) {
-#	    app->log->error('Skipping possible short clip');
-	    #return;
-#        }
-#        $state->{$file}->{end} = time();
-#	if ($state->{$file}->{end} - $state->{$file}->{start} == 0) {
-#	    app->log->debug('Skipping short clip');
-#	    #return;
-#        }
-#	my $count = $state->{$file}->{count};
-#	$state->{$file}->{count} = ++$count;
-#	app->update_count($state->{$file});
-
-	# convert file to sample rate chrome supports
-#        $c->fork_call(
-#            sub {
-#	        my @args = ( 'sox', $state->{$file}->{file_preconv}, 
-#                                 '-r', '44100', '-c', '2', $state->{$file}->{file});
-#		system(@args);
-#	        return @args;
-#            },
-#            sub {
-#	        my ($c, @stuff) = @_;
-#		app->log->info("sox done: $state->{file}");
-#	        app->publish( $state->{$file} );
-#                delete $state->{$file};
-#            }
-#        );
-#    }
-#};
 
 helper load_freqs => sub {
 
