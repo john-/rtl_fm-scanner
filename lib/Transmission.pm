@@ -1,11 +1,12 @@
 package Transmission;
 
 use Mojo::Util qw(dumper);
+use Mojo::IOLoop::ForkCall;
+use Mojo::JSON qw(decode_json encode_json);
 
 use constant NO_PASS     => 0;
 use constant MANUAL_PASS => 1;
 use constant AUTO_PASS   => 2;
-use Mojo::IOLoop::ForkCall;
 
 sub new {
     my ( $class, $app, $freq, $source ) = @_;
@@ -44,6 +45,8 @@ sub new {
 sub start_xmit_timer {
     my $self = shift;
 
+    #TODO:  There is probably a bug where this timer gets hit after rl_fm is restarted.
+    #       Probably need to add a method for sub that restarts rtl_fm to kill this timer.
     $self->{timer} = Mojo::IOLoop->timer(
         10 => sub {
             my $loop = shift;
@@ -53,10 +56,6 @@ sub start_xmit_timer {
 
             $self->{app}
               ->update_pass( $self->{freq}, $self->{bank}, AUTO_PASS );
-
-            #app->publish( $state->{$file} );  # for testing let client know
-            #delete $state->{$file};
-            #$c->start_rtlfm;
         }
     );
 }
@@ -73,10 +72,6 @@ sub close {
         $self->{app}->log->info( sprintf('Throwing away short transmission') );
         return;
     }
-
-    #my $count = $self->{count};
-    #$self->{count} = ++$count;
-    #$self->{app}->update_count( $self->{freq}, $self->{bank}, $self->{count} );
 
     $self->{app}->log->info( sprintf('transmission closed') );
 
@@ -119,7 +114,7 @@ sub close {
 
             }
 
-            $self->{app}->publish( $self->neuter_self );
+	    $self->{app}->pubsub->notify(msg => encode_json( $self->neuter_self ));
 
             $self->{app}->pg->db->query(
 'INSERT INTO xmit_history (freq_key, source, start, stop) values (?, ?, to_timestamp(?), to_timestamp(?))',

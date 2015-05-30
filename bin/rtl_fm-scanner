@@ -5,6 +5,8 @@ use Mojo::IOLoop;
 use Mojo::Util qw(dumper);
 use Mojo::Log;
 use Mojo::Pg;
+use Mojo::Pg::PubSub;
+use Mojo::JSON qw(decode_json encode_json);
 
 use FindBin qw($Bin);
 use lib "$Bin/../lib";
@@ -64,16 +66,12 @@ websocket '/output' => sub {
 
     $c->send( { json => app->config_msg } );
 
-    my $id = Mojo::IOLoop->recurring(
-        0.5 => sub {
-            my $loop = shift;
-
-            while ( my $msg = app->get_msg($client) ) {
-                $c = $c->send( { json => $msg } );
-                app->log->info("item to let client know about: $msg->{type}");
-            }
-        }
-    );
+    my $cb = $c->pubsub->listen(msg => sub {
+	my ($pubsub, $payload) = @_;
+	my $msg = decode_json($payload);
+        $c = $c->send( { json => $msg } );
+        app->log->debug("item to let client know about (pubsub): $msg->{type}");
+    });
 
     $c->on(
         json => sub {
@@ -97,7 +95,7 @@ websocket '/output' => sub {
                 $c->start_rtlfm
                   ;    # need to start rtl_fm for changes to take effect
 
-                app->publish( app->config_msg );
+                $c->pubsub->notify(msg => encode_json( app->config_msg ));
             }
 
             #app->log->debug("Message: ".dumper($hash));
@@ -107,22 +105,10 @@ websocket '/output' => sub {
     $c->on(
         finish => sub {
             my ( $c, $code, $reason ) = @_;
-            Mojo::IOLoop->remove($id);
+	    $c->pubsub->unlisten( msg => $cb );
             $c->app->log->debug("WebSocket closed with status $code.");
         }
     );
-};
-
-helper get_msg => sub {
-    my ( $self, $client ) = @_;
-
-    return shift @{ app->defaults->{announce_sub}{$client} };
-};
-
-helper publish => sub {
-    my ( $self, $msg ) = @_;
-
-    push @$_, $msg for values %{ app->defaults->{announce_sub} };
 };
 
 helper config_msg => sub {
@@ -134,6 +120,13 @@ helper config_msg => sub {
 helper pg => sub {
     state $pg = Mojo::Pg->new('postgresql://script@/cart')
       or app->log->error('Could not connect to database');
+};
+
+helper pubsub => sub {
+    my $self = shift;
+
+    state $pubsub = Mojo::Pg::PubSub->new(pg => $self->pg);
+
 };
 
 helper select => sub {
@@ -157,8 +150,7 @@ helper update_pass => sub {
         $pass, $freq, $bank );
 
     app->load_freqs;
-    app->publish( { type => 'update' } );    # what freqs are available
-          #app->log->info( sprintf('|%s|%s|%s|', $pass, $freq, $label) );
+    $self->pubsub->notify(msg => encode_json( {type => 'update'} ));
     $self->start_rtlfm;
 };
 
@@ -174,8 +166,8 @@ helper clear_auto_pass => sub {
     }
 
     app->load_freqs;
-    app->publish( { type => 'update' } );    # what freqs are available
-          #app->log->info( sprintf('|%s|%s|%s|', $pass, $freq, $label) );
+
+    $self->pubsub->notify(msg => encode_json( {type => 'update'} ));
 };
 
 helper load_freqs => sub {
@@ -230,6 +222,7 @@ helper start_rtlfm => sub {
         #		 '-r', '44100',
         '-l', $config->{squelch},
         '-g', $config->{gain},
+	#'-t', 50,
 
         #		 '-E', 'wav',
         @freq_args,
@@ -335,7 +328,7 @@ scan_ws.onmessage = function (event) {
     switch (msg.type) {
         case 'audio':
             enqueue(msg);
-            scanner_page();
+            //scanner_page();
             break;
         case 'update':
             scanner_page();
