@@ -5,7 +5,6 @@ use Mojo::IOLoop;
 use Mojo::Util qw(dumper);
 use Mojo::Log;
 use Mojo::Pg;
-#use DBIx::Connector;
 
 use FindBin qw($Bin);
 use lib "$Bin/../lib";
@@ -18,24 +17,20 @@ use constant AUTO_PASS   => 2;
 
 my $config = plugin Config => { file => '../config/scanner.conf' };
 
-#my $pg = Mojo::Pg->new('postgresql://script@/cart');
-#my $db = $pg->db;
-
-app->log(Mojo::Log->new(path => '../log/rtl_fm-scanner.log'));
+app->log( Mojo::Log->new( path => '../log/rtl_fm-scanner.log' ) );
 
 app->plugin('RenderFile');
 app->plugin('CORS'); # lets the client get around same origin policy restriction
 
 app->secrets( ['Specfying a secret to make the reminder go away.'] );
 
-#my $dbname = '../data/freqs.db';
-
-my $xmit;             # design handles one transmission at a time
+my $xmit;            # design handles one transmission at a time
 
 get '/self' => sub {
     my $c = shift;
 
     $c->render( json => { function => 'Scanner' } );
+
 # ugh this is nasty but I need to store it here because it does not work in the helper
     app->defaults->{audio_url} = $c->url_for('audio')->to_abs;
 };
@@ -69,12 +64,11 @@ websocket '/output' => sub {
 
     $c->send( { json => app->config_msg } );
 
-    my $id        = Mojo::IOLoop->recurring(
+    my $id = Mojo::IOLoop->recurring(
         0.5 => sub {
             my $loop = shift;
 
-	    while ( my $msg = app->get_msg($client) )
-            {
+            while ( my $msg = app->get_msg($client) ) {
                 $c = $c->send( { json => $msg } );
                 app->log->info("item to let client know about: $msg->{type}");
             }
@@ -85,21 +79,25 @@ websocket '/output' => sub {
         json => sub {
             my ( $ws, $hash ) = @_;
 
-	    if ( $hash->{type} eq 'ping' ) {
-		app->log->debug('client pinged me');
-            } elsif ( $hash->{type} eq 'set_pass' ) {
+            if ( $hash->{type} eq 'ping' ) {
+                app->log->debug('client pinged me');
+            }
+            elsif ( $hash->{type} eq 'set_pass' ) {
                 app->update_pass( $hash->{freq}, $hash->{bank}, $hash->{pass} );
+
                 #$c->start_rtlfm;
-            } elsif ( $hash->{type} eq 'clear_auto_pass' ) {
-		app->log->debug('about to clear auto pass');
+            }
+            elsif ( $hash->{type} eq 'clear_auto_pass' ) {
+                app->log->debug('about to clear auto pass');
                 app->clear_auto_pass;
                 $c->start_rtlfm;
             }
             elsif ( $hash->{type} eq 'set_squelch' ) {
                 $config->{squelch} = $hash->{squelch};
-                $c->start_rtlfm;    # need to start rtl_fm for changes to take effect
+                $c->start_rtlfm
+                  ;    # need to start rtl_fm for changes to take effect
 
-		app->publish( app->config_msg );
+                app->publish( app->config_msg );
             }
 
             #app->log->debug("Message: ".dumper($hash));
@@ -124,16 +122,14 @@ helper get_msg => sub {
 helper publish => sub {
     my ( $self, $msg ) = @_;
 
-    push @$_, $msg
-      for values %{ app->defaults->{announce_sub} };
+    push @$_, $msg for values %{ app->defaults->{announce_sub} };
 };
 
 helper config_msg => sub {
     my $self = shift;
 
-    return { type => 'config', %{ $config } };
+    return { type => 'config', %{$config} };
 };
-
 
 helper pg => sub {
     state $pg = Mojo::Pg->new('postgresql://script@/cart')
@@ -143,13 +139,11 @@ helper pg => sub {
 helper select => sub {
     my ( $self, $bank ) = @_;
 
-    #my $db = $self->pg->db;
-
     # TODO:  At some point limit based on current year or something.
-    my $results = $self->pg->db->query('select freqs.freq_key, freq, label, bank, pass, count(xmit_key) from freqs left outer join xmit_history on freqs.freq_key = xmit_history.freq_key where bank = ? group by freqs.freq_key, freqs.label',
-                                         $bank)->hashes->to_array;
-    #my $results = $self->pg->db->query('select * from freqs where bank = ? order by label',
-    #                                     $group)->hashes->to_array;
+    my $results = $self->pg->db->query(
+'select freqs.freq_key, freq, label, bank, pass, count(xmit_key) from freqs left outer join xmit_history on freqs.freq_key = xmit_history.freq_key where bank = ? group by freqs.freq_key, freqs.label',
+        $bank
+    )->hashes->to_array;
     return $results;
 };
 
@@ -159,37 +153,36 @@ helper update_pass => sub {
     app->log->info(
         sprintf( 'change pass for %s (%s) to %s', $freq, $bank, $pass ) );
 
-    $self->pg->db->query('UPDATE freqs SET pass=? WHERE freq = ? AND bank = ?',
-                         $pass, $freq, $bank);
+    $self->pg->db->query( 'UPDATE freqs SET pass=? WHERE freq = ? AND bank = ?',
+        $pass, $freq, $bank );
 
     app->load_freqs;
-    app->publish( { type => 'update' } ); # what freqs are available
-    #app->log->info( sprintf('|%s|%s|%s|', $pass, $freq, $label) );
+    app->publish( { type => 'update' } );    # what freqs are available
+          #app->log->info( sprintf('|%s|%s|%s|', $pass, $freq, $label) );
     $self->start_rtlfm;
 };
 
 helper clear_auto_pass => sub {
     my $self = shift;
 
-    app->log->info(
-        sprintf( 'clearing auto pass for all frequencies' ) );
+    app->log->info( sprintf('clearing auto pass for all frequencies') );
 
     my $db = $self->pg->db;
 
     foreach my $bank ( @{ $config->{banks} } ) {
-	$db->query('UPDATE freqs SET pass=0 WHERE pass=2 AND bank=?', $bank);
+        $db->query( 'UPDATE freqs SET pass=0 WHERE pass=2 AND bank=?', $bank );
     }
 
     app->load_freqs;
-    app->publish( { type => 'update' } ); # what freqs are available
-    #app->log->info( sprintf('|%s|%s|%s|', $pass, $freq, $label) );
+    app->publish( { type => 'update' } );    # what freqs are available
+          #app->log->info( sprintf('|%s|%s|%s|', $pass, $freq, $label) );
 };
 
 helper load_freqs => sub {
 
     my @freqs;
     foreach my $bank ( @{ $config->{banks} } ) {
-        push @freqs,  @{ app->select( $bank ) };
+        push @freqs, @{ app->select($bank) };
     }
 
     app->defaults( freq_list => \@freqs );
@@ -217,10 +210,10 @@ helper start_rtlfm => sub {
 
     my @freqs = @{ app->defaults->{freq_list} };
     my @freq_args;
-    foreach my $entry ( @freqs ) {
+    foreach my $entry (@freqs) {
 
-	if ($entry->{pass} == NO_PASS ) {
-             push @freq_args, sprintf( "-f %sM", $entry->{freq} );
+        if ( $entry->{pass} == NO_PASS ) {
+            push @freq_args, sprintf( "-f %sM", $entry->{freq} );
         }
 
     }
@@ -228,19 +221,22 @@ helper start_rtlfm => sub {
     #app->log->info('freqs'.dumper(@freq_args));
     #app->log->debug(dumper(app->defaults->{freq_list}));
 
-    my @args = ( '/usr/local/bin/rtl_fm',
-		 '-M', $config->{mode},
-		 '-p', $config->{ppm},
-		 '-s', '12k',
-#		 '-r', '44100',
-		 '-l', $config->{squelch},
-		 '-g', $config->{gain},
-#		 '-E', 'wav',
-		 @freq_args,
-		 '-n', '../archive',
-		 '/tmp/ignored.out'
-	);
-    my $cmd = join(' ', @args);
+    my @args = (
+        '/usr/local/bin/rtl_fm',
+        '-M', $config->{mode},
+        '-p', $config->{ppm},
+        '-s', '12k',
+
+        #		 '-r', '44100',
+        '-l', $config->{squelch},
+        '-g', $config->{gain},
+
+        #		 '-E', 'wav',
+        @freq_args,
+        '-n', '../archive',
+        '/tmp/ignored.out'
+    );
+    my $cmd = join( ' ', @args );
 
     my $rtlfm_fifo;
     my $rtlfm_pid = open( $rtlfm_fifo, "$cmd 2>&1 |" ) or do {
@@ -271,11 +267,12 @@ helper start_rtlfm => sub {
                     )
                 );
 
-		if ($status eq 'OPEN') {
-		    $xmit = Transmission->new(app, $cur_freq, $file);
-                } else {
-		    $xmit->close;
-		}
+                if ( $status eq 'OPEN' ) {
+                    $xmit = Transmission->new( app, $cur_freq, $file );
+                }
+                else {
+                    $xmit->close;
+                }
 
                 #app->set_state( $status, $cur_freq, $file );
             }
