@@ -48,14 +48,15 @@ sub start_xmit_timer {
     #TODO:  There is probably a bug where this timer gets hit after rl_fm is restarted.
     #       Probably need to add a method for sub that restarts rtl_fm to kill this timer.
     $self->{timer} = Mojo::IOLoop->timer(
-        10 => sub {
+        15 => sub {
             my $loop = shift;
 
             $self->{app}
               ->log->info( sprintf( 'Long xmit (%s)', $self->{source_file} ) );
 
-            $self->{app}
-              ->update_pass( $self->{freq}, $self->{bank}, AUTO_PASS );
+	    $self->close;
+            #$self->{app}
+            #  ->update_pass( $self->{freq}, $self->{bank}, AUTO_PASS );
         }
     );
 }
@@ -89,7 +90,8 @@ sub close {
                 'signed-integer', $self->{source_file},
                 '-r',             '44100',
                 '-c',             '2',
-                $self->{file}
+                $self->{file},
+		'pad',           '0',  '1'
             );
             system(@args);
             return @args;
