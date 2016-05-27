@@ -5,13 +5,15 @@ use Mojo::IOLoop;
 use Mojo::Util qw(dumper);
 use Mojo::Log;
 use Mojo::Pg;
-use Mojo::Pg::PubSub;
+#use Mojo::Pg::PubSub;
 use Mojo::JSON qw(decode_json encode_json);
 
 use FindBin qw($Bin);
 use lib "$Bin/../lib";
 
-use Transmission;
+use FileWatch;
+
+use Data::Dumper;
 
 use constant NO_PASS     => 0;
 use constant MANUAL_PASS => 1;
@@ -25,8 +27,6 @@ app->plugin('RenderFile');
 app->plugin('CORS'); # lets the client get around same origin policy restriction
 
 app->secrets( ['Specfying a secret to make the reminder go away.'] );
-
-my $xmit;            # design handles one transmission at a time
 
 get '/self' => sub {
     my $c = shift;
@@ -45,7 +45,7 @@ get '/audio' => sub {
 
     # Open file in browser(do not show save dialog)
     $c->render_file(
-        'filepath'            => "../archive/$file",
+        'filepath'            => "/home/pub/ham2mon/apps/wav/$file",
         'content_disposition' => 'inline'
     );
 };
@@ -66,12 +66,25 @@ websocket '/output' => sub {
 
     $c->send( { json => app->config_msg } );
 
-    my $cb = $c->pubsub->listen(msg => sub {
-	my ($pubsub, $payload) = @_;
-	my $msg = decode_json($payload);
-        $c = $c->send( { json => $msg } );
-        app->log->debug("item to let client know about (pubsub): $msg->{type}");
-    });
+
+    my $watcher = Inotifier::Model::FileWatch->new($c->app);
+
+    our $cb = $watcher->watch(
+        sub {
+            my $msg = shift;
+            $msg->{url} = $c->app->defaults->{audio_url};
+	    #print "hello there: " . $msg->{freq} . "\n";
+            $c = $c->send( { json => $msg } );
+            $c->app->log->debug("item to let client know about (watcher): $msg->{type}");
+        }
+    );
+
+    #my $cb = $c->pubsub->listen(msg => sub {
+#	my ($pubsub, $payload) = @_;
+#	my $msg = decode_json($payload);
+ #       $c = $c->send( { json => $msg } );
+  #      app->log->debug("item to let client know about (pubsub): $msg->{type}");
+   # });
 
     $c->on(
         json => sub {
@@ -105,7 +118,7 @@ websocket '/output' => sub {
     $c->on(
         finish => sub {
             my ( $c, $code, $reason ) = @_;
-	    $c->pubsub->unlisten( msg => $cb );
+	    #$c->pubsub->unlisten( msg => $cb );
             $c->app->log->debug("WebSocket closed with status $code.");
         }
     );
@@ -120,13 +133,6 @@ helper config_msg => sub {
 helper pg => sub {
     state $pg = Mojo::Pg->new('postgresql://script@/cart')
       or app->log->error('Could not connect to database');
-};
-
-helper pubsub => sub {
-    my $self = shift;
-
-    state $pubsub = Mojo::Pg::PubSub->new(pg => $self->pg);
-
 };
 
 helper select => sub {
@@ -180,132 +186,7 @@ helper load_freqs => sub {
     app->defaults( freq_list => \@freqs );
 };
 
-helper start_rtlfm => sub {
-    my $c = shift;
-
-    # errors to handle:
-    # dongle yanked:
-    #    rtlsdr_demod_write_reg failed with -1
-    #    rtlsdr_demod_read_reg failed with -4
-    #    cb transfer status: 5, canceling
-
-    if ( defined app->defaults('rtlfm_pid') ) {
-        my $pid = app->defaults('rtlfm_pid');
-        app->log->info( sprintf( 'About to kill rtl_fm (pid: %s)', $pid ) );
-        kill 'HUP', $pid;
-        delete app->defaults->{rtlfm_pid};
-        Mojo::IOLoop->timer( 1 => sub { $c->start_rtlfm } );    # Time to exit
-        return;
-    }
-
-    app->log->info('about to start rtl_fm');
-
-    my @freqs = @{ app->defaults->{freq_list} };
-    my @freq_args;
-    foreach my $entry (@freqs) {
-
-        if ( $entry->{pass} == NO_PASS ) {
-            push @freq_args, sprintf( "-f %sM", $entry->{freq} );
-        }
-
-    }
-
-    #app->log->info('freqs'.dumper(@freq_args));
-    #app->log->debug(dumper(app->defaults->{freq_list}));
-
-    my @args = (
-        '/usr/local/bin/rtl_fm',
-        '-M', $config->{mode},
-        '-p', $config->{ppm},
-        '-s', '12k',
-
-        #		 '-r', '44100',
-        '-l', $config->{squelch},
-        '-g', $config->{gain},
-	#'-t', 50,
-
-        #		 '-E', 'wav',
-        @freq_args,
-        '-n', '../archive',
-        '/tmp/ignored.out'
-    );
-    my $cmd = join( ' ', @args );
-
-    my $rtlfm_fifo;
-    my $rtlfm_pid = open( $rtlfm_fifo, "$cmd 2>&1 |" ) or do {
-
-     # this will not be hit if rtl_fm command is executed and there is no dongle
-        app->log->error("Couldn't open rtl_fm: $!");
-        return;
-    };
-
-    my $stream_in = Mojo::IOLoop::Stream->new($rtlfm_fifo);
-
-    $stream_in = $stream_in->timeout(0);
-    $stream_in->on(
-        read => sub {
-            my ( $stream_in, $bytes ) = @_;
-            chomp($bytes);
-
-            # I probably need to seperate OPEN from CLOSED
-            if ( $bytes =~ /(OPEN|CLOSED)\|(\d+)\|(.+)/ ) {
-                my $status   = $1;
-                my $cur_freq = $2 / 1000000;
-                my $file     = $3;
-
-                app->log->info(
-                    sprintf(
-                        'status: %s freq: %s file: %s',
-                        $status, $cur_freq, $file
-                    )
-                );
-
-                if ( $status eq 'OPEN' ) {
-                    $xmit = Transmission->new( app, $cur_freq, $file );
-                }
-                else {
-                    $xmit->close;
-                }
-
-                #app->set_state( $status, $cur_freq, $file );
-            }
-            elsif ( $bytes =~ /No supported devices found/ ) {
-                app->log->error('No dongle connected!');
-
-                # retry in a few seconds
-                Mojo::IOLoop->timer( 6 => sub { $c->start_rtlfm } );
-                return;
-            }
-            elsif ( $bytes =~ /Using device/ )
-            {    # set pid here as rtl_fm can "open" and fail soon after
-                app->defaults( rtlfm_pid => $rtlfm_pid );
-            }
-            else {
-                app->log->info(
-                    sprintf( 'not sure what this is: %s', $bytes ) );
-            }
-        }
-    );
-    $stream_in->on(
-        close => sub {
-            my $stream_in = shift;
-            app->log->info('stream_in closed');
-        }
-    );
-    $stream_in->on(
-        error => sub {
-            my ( $stream_in, $err ) = @_;
-            app->log->info('stream_in error');
-        }
-    );
-    my $sid = Mojo::IOLoop->stream($stream_in);
-    $stream_in->on( finish => sub { Mojo::IOLoop->remove($sid) } );
-
-};
-
 app->load_freqs;
-
-app->start_rtlfm;
 
 app->start;
 
