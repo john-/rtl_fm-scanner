@@ -69,7 +69,7 @@ websocket '/output' => sub {
 
     my $watcher = Inotifier::Model::FileWatch->new($c->app);
 
-    our $cb = $watcher->watch(
+    $c->{cb}{$client} = $watcher->watch(
         sub {
             my $msg = shift;
             $msg->{url} = $c->app->defaults->{audio_url};
@@ -119,6 +119,8 @@ websocket '/output' => sub {
         finish => sub {
             my ( $c, $code, $reason ) = @_;
 	    #$c->pubsub->unlisten( msg => $cb );
+	    $watcher->unwatch();
+            delete $c->{cb}{$client};
             $c->app->log->debug("WebSocket closed with status $code.");
         }
     );

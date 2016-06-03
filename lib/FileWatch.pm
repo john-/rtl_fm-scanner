@@ -48,15 +48,15 @@ sub watch {
 
     $self->{cb} = $msg;
 
-    $self->{watcher} = new Linux::Inotify2;
-    my $watcher = $self->{watcher};
-    $watcher->watch( '/home/pub/ham2mon/apps/wav', IN_CLOSE_WRITE,
+    my $notifier = new Linux::Inotify2;
+
+    $self->{watcher} = $notifier->watch( '/home/pub/ham2mon/apps/wav', IN_CLOSE_WRITE,
         sub { $self->file_added(@_) } );
 
     my $io = AnyEvent->io(
-        fh   => $watcher->{fd},
+        fh   => $notifier->{fd},
         poll => 'r',
-        cb   => sub { $watcher->poll }
+        cb   => sub { $notifier->poll }
     );
 
     $self->{app}->log->debug('Watching new files for client');
