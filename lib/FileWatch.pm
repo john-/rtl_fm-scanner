@@ -23,6 +23,14 @@ sub file_added {
     my ( $self, $event ) = @_;
 
     my $file = $event->name;
+
+    unless (-e $event->fullname) {
+	# there is code in ham2mon to delete wav files with header
+	# only (44 bytes).
+	$self->{app}->log->debug( sprintf('a header only file was removed by ham2mon: %s', $file) );
+	return;
+    }
+
     my ($freq) = $file =~ /(.*)_.*\.wav/;
 
     my @freq_list = @{ $self->{app}->defaults('freq_list') };
