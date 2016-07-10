@@ -50,7 +50,14 @@ sub file_added {
     $self->{app}->log->debug(Dumper($entry));
 
     if (! $entry ) {   # if no entry then create one
-        $entry = { label => $freq }
+	$entry->{freq_key} = $self->{pg}->db->query('insert into freqs (freq, label, bank, source) values (?, ?, ?, ?) returning freq_key', $freq, 'Unknown', 'TBD', 'search')
+	    ->hash->{freq_key};
+
+        $entry = { label => 'Unknown',
+                   bank  => 'TBD',
+	           freq_key => $entry->{freq_key},
+                   pass => 0,
+                 }
     }
     
     my $xmit = {
