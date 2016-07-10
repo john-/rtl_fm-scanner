@@ -3,6 +3,7 @@ package Inotifier::Model::FileWatch;
 use Linux::Inotify2;
 use EV;
 use AnyEvent;
+use Mojo::Pg;
 
 use strict;
 use warnings;
@@ -12,8 +13,12 @@ use Data::Dumper;
 sub new {
     my ($class, $app) = @_;
 
+    my $pg = Mojo::Pg->new('postgresql://script@/cart')
+	or $app->log->error('Could not connect to database');
+
     my $self = {
 	app => $app,
+	pg  => $pg,
     };
 
     return bless $self, $class;
@@ -33,12 +38,20 @@ sub file_added {
 
     my ($freq) = $file =~ /(.*)_.*\.wav/;
 
-    my @freq_list = @{ $self->{app}->defaults('freq_list') };
-    ( my $entry ) = grep { $_->{freq} == $freq } @freq_list;
+    #  TODO:  this may be better as direct query of DB as 
+    #my @freq_list = @{ $self->{app}->defaults('freq_list') };
+    #( my $entry ) = grep { $_->{freq} == $freq } @freq_list;
 
-    #$self->{app}->log->debug(Dumper(@freq_list));
+    my $entry = $self->{pg}->db->query(
+	'select freq_key, freq, label, bank, pass from freqs where freq = ? limit 1',
+	$freq
+	)->hash;    #  TODO: under what situations can there be more than one across scanned banks?
 
-    if (! $entry ) { $entry = { label => $freq } }
+    $self->{app}->log->debug(Dumper($entry));
+
+    if (! $entry ) {   # if no entry then create one
+        $entry = { label => $freq }
+    }
     
     my $xmit = {
         'freq' => $freq,
@@ -49,6 +62,11 @@ sub file_added {
     };
 
     $self->{cb}->($xmit);
+
+    $self->{pg}->db->query(
+        'INSERT INTO xmit_history (freq_key, source, start, stop) values (?, ?, to_timestamp(?), to_timestamp(?))',
+	    $entry->{freq_key}, 'dongle1', $xmit->{stop}, $xmit->{stop}    # with approach probably no start time
+    );
 }
 
 sub watch {
