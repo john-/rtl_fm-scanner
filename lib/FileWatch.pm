@@ -102,4 +102,15 @@ sub unwatch {
     $self->{watcher}->cancel;
 }
 
+sub set_pass {
+    my ( $self, $freq, $bank, $pass ) = @_;
+
+    $self->{app}->log->info(
+	sprintf( 'change pass for %s (%s) to %s', $freq, $bank, $pass ) );
+
+    $self->{pg}->db->query( 'UPDATE freqs SET pass=? WHERE freq = ? AND bank = ?',
+			          $pass, $freq, $bank );
+
+    # now create blocklist for scanner
+}
 1;
