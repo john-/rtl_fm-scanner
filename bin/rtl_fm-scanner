@@ -53,7 +53,9 @@ get '/audio' => sub {
 get '/freqs' => sub {
     my $c = shift;
 
-    $c->render( json => app->defaults('freq_list') );
+    # TODO: Get this from DB or keep memory copy updated
+    #app->defaults( freq_list => \@{ app->select('not used') } );
+    $c->render( json => \@{ app->select('not used') } );
 };
 
 websocket '/output' => sub {
@@ -94,8 +96,12 @@ websocket '/output' => sub {
                 app->log->debug('client pinged me');
             }
             elsif ( $hash->{type} eq 'set_pass' ) {
-                app->update_pass( $hash->{freq}, $hash->{bank}, $hash->{pass} );
+                #app->update_pass( $hash->{freq}, $hash->{bank}, $hash->{pass} );
 
+		$watcher->set_pass( $hash->{freq}, $hash->{bank}, $hash->{pass} );
+                $c = $c->send( { json => {type => 'update'} } );
+
+		#$c->pubsub->notify(msg => encode_json( {type => 'update'} ));
                 #$c->start_rtlfm;
             }
             elsif ( $hash->{type} eq 'clear_auto_pass' ) {
@@ -142,25 +148,25 @@ helper select => sub {
 
     # TODO:  At some point limit based on current year or something.
     my $results = $self->pg->db->query(
-'select freqs.freq_key, freq, label, bank, pass, count(xmit_key) from freqs left outer join xmit_history on freqs.freq_key = xmit_history.freq_key where bank = ? group by freqs.freq_key, freqs.label',
-        $bank
+'select freqs.freq_key, freq, label, bank, pass from xmit_history, freqs where xmit_history.freq_key = freqs.freq_key order by xmit_key desc limit 10'
     )->hashes->to_array;
     return $results;
 };
 
-helper update_pass => sub {
-    my ( $self, $freq, $bank, $pass ) = @_;
+#helper update_pass => sub {
+#    my ( $self, $freq, $bank, $pass ) = @_;
 
-    app->log->info(
-        sprintf( 'change pass for %s (%s) to %s', $freq, $bank, $pass ) );
+#    app->log->info(
+#        sprintf( 'change pass for %s (%s) to %s', $freq, $bank, $pass ) );
 
-    $self->pg->db->query( 'UPDATE freqs SET pass=? WHERE freq = ? AND bank = ?',
-        $pass, $freq, $bank );
+#    $self->pg->db->query( 'UPDATE freqs SET pass=? WHERE freq = ? AND bank = ?',
+#        $pass, $freq, $bank );
 
-    app->load_freqs;
-    $self->pubsub->notify(msg => encode_json( {type => 'update'} ));
-    $self->start_rtlfm;
-};
+#    app->set_blocklist;
+    #app->load_freqs;
+#    $self->pubsub->notify(msg => encode_json( {type => 'update'} ));
+    #$self->start_rtlfm;
+#};
 
 helper clear_auto_pass => sub {
     my $self = shift;
@@ -178,17 +184,12 @@ helper clear_auto_pass => sub {
     $self->pubsub->notify(msg => encode_json( {type => 'update'} ));
 };
 
-helper load_freqs => sub {
+#helper load_freqs => sub {
 
-    my @freqs;
-    foreach my $bank ( @{ $config->{banks} } ) {
-        push @freqs, @{ app->select($bank) };
-    }
+#    app->defaults( freq_list => \@{ app->select('not used') } );
+#};
 
-    app->defaults( freq_list => \@freqs );
-};
-
-app->load_freqs;
+#app->load_freqs;
 
 app->start;
 
@@ -211,7 +212,7 @@ scan_ws.onmessage = function (event) {
     switch (msg.type) {
         case 'audio':
             enqueue(msg);
-            //scanner_page();
+            scanner_page();
             break;
         case 'update':
             scanner_page();
