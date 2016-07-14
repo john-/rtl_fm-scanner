@@ -38,10 +38,6 @@ sub file_added {
 
     my ($freq) = $file =~ /(.*)_.*\.wav/;
 
-    #  TODO:  this may be better as direct query of DB as 
-    #my @freq_list = @{ $self->{app}->defaults('freq_list') };
-    #( my $entry ) = grep { $_->{freq} == $freq } @freq_list;
-
     my $entry = $self->{pg}->db->query(
 	'select freq_key, freq, label, bank, pass from freqs where freq = ? limit 1',
 	$freq
@@ -112,5 +108,15 @@ sub set_pass {
 			          $pass, $freq, $bank );
 
     # now create blocklist for scanner
+    open(my $fh, '>', '/home/pub/ham2mon/apps/lockout.txt')
+	or die 	$self->{app}->log->error("Can't open > lockout.txt: $!");
+
+    my $results = $self->{pg}->db->query( 'select freq from freqs where pass = 1');
+    while (my $next = $results->array) {
+	$self->{app}->log->debug($next->[0]);
+	print $fh "$next->[0]E6\n";
+    }
+    close($fh);
+    # poke the screen session with scanner to reload the blocklist
 }
 1;
