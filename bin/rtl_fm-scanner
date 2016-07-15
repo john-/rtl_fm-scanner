@@ -148,7 +148,7 @@ helper select => sub {
 
     # TODO:  At some point limit based on current year or something.
     my $results = $self->pg->db->query(
-'select freqs.freq_key, freq, label, bank, pass from xmit_history, freqs where xmit_history.freq_key = freqs.freq_key order by xmit_key desc limit 10'
+'select freqs.freq_key, freq, label, bank, pass, file from xmit_history, freqs where xmit_history.freq_key = freqs.freq_key order by xmit_key desc limit 10'
     )->hashes->to_array;
     return $results;
 };

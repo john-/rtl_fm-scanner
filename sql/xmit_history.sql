@@ -2,6 +2,7 @@ CREATE TABLE xmit_history (
         xmit_key		SERIAL PRIMARY KEY,
         freq_key		INTEGER REFERENCES freqs (freq_key),
 	source			TEXT NOT NULL DEFAULT 'scanner',
+        file                    TEXT NOT NULL,
 	start			TIMESTAMPTZ NOT NULL,
 	stop			TIMESTAMPTZ NOT NULL,
 	entered			TIMESTAMPTZ NOT NULL DEFAULT current_timestamp

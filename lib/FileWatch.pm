@@ -43,7 +43,7 @@ sub file_added {
 	$freq
 	)->hash;    #  TODO: under what situations can there be more than one across scanned banks?
 
-    $self->{app}->log->debug(Dumper($entry));
+    #$self->{app}->log->debug(Dumper($entry));
 
     if (! $entry ) {   # if no entry then create one
 	$entry->{freq_key} = $self->{pg}->db->query('insert into freqs (freq, label, bank, source) values (?, ?, ?, ?) returning freq_key', $freq, 'Unknown', 'TBD', 'search')
@@ -67,8 +67,8 @@ sub file_added {
     $self->{cb}->($xmit);
 
     $self->{pg}->db->query(
-        'INSERT INTO xmit_history (freq_key, source, start, stop) values (?, ?, to_timestamp(?), to_timestamp(?))',
-	    $entry->{freq_key}, 'dongle1', $xmit->{stop}, $xmit->{stop}    # with approach probably no start time
+        'INSERT INTO xmit_history (freq_key, source, file, start, stop) values (?, ?, ?, to_timestamp(?), to_timestamp(?))',
+	    $entry->{freq_key}, 'dongle1', $file, $xmit->{stop}, $xmit->{stop}    # with approach probably no start time
     );
 }
 
@@ -111,12 +111,14 @@ sub set_pass {
     open(my $fh, '>', '/home/pub/ham2mon/apps/lockout.txt')
 	or die 	$self->{app}->log->error("Can't open > lockout.txt: $!");
 
-    my $results = $self->{pg}->db->query( 'select freq from freqs where pass = 1');
+    my $results = $self->{pg}->db->query( 'select freq from freqs where pass = 1 order by freq asc');
     while (my $next = $results->array) {
 	$self->{app}->log->debug($next->[0]);
 	print $fh "$next->[0]E6\n";
     }
     close($fh);
+
     # poke the screen session with scanner to reload the blocklist
+    system( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff', '"l"' );
 }
 1;
