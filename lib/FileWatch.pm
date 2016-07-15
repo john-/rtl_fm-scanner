@@ -98,6 +98,14 @@ sub unwatch {
     $self->{watcher}->cancel;
 }
 
+sub get_freqs {
+    my ($self, $mode) = @_;
+
+    return $self->{pg}->db->query(
+	'select freqs.freq_key, xmit_key, freq, label, bank, pass, file from xmit_history, freqs where xmit_history.freq_key = freqs.freq_key order by xmit_key desc limit 10'
+	)->hashes->to_array;
+}
+
 sub set_pass {
     my ( $self, $freq, $bank, $pass ) = @_;
 

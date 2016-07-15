@@ -146,11 +146,9 @@ helper pg => sub {
 helper select => sub {
     my ( $self, $bank ) = @_;
 
-    # TODO:  At some point limit based on current year or something.
-    my $results = $self->pg->db->query(
-'select freqs.freq_key, freq, label, bank, pass, file from xmit_history, freqs where xmit_history.freq_key = freqs.freq_key order by xmit_key desc limit 10'
-    )->hashes->to_array;
-    return $results;
+    my $watcher = Inotifier::Model::FileWatch->new($self->app);
+
+    return $watcher->get_freqs;
 };
 
 #helper update_pass => sub {
@@ -255,8 +253,8 @@ scanner_page = function () {
 		    .append(
 		  	$('<a/>', {
 			    html: contents,
-			    href: "#" + detail.freq,
-                            id: detail.freq + '-' + detail.bank
+			    href: "#" + detail.xmit_key,
+                            id: detail.xmit_key
 			})
 			).appendTo("#frequencies");
 
@@ -270,7 +268,7 @@ scanner_page = function () {
                 var id = $( this ).attr('id');
 
                 var entry = $.grep(json, function(obj) {
-                    return id == obj.freq + '-' + obj.bank;
+                    return id == obj.xmit_key;
                 });
 
                 frequency_config(entry[0]);
@@ -345,7 +343,7 @@ frequency_config = function(entry) {
         }
     }).appendTo($config);
 
-    //create a back button
+    //create a cancel button
     $("<a>", {
         text : "Cancel",
     }).buttonMarkup({
@@ -353,6 +351,18 @@ frequency_config = function(entry) {
         icon : "back"
     }).bind('click', function() {
         $config.popup('close');
+    }).appendTo($config);
+
+   //Create a play button
+    $("<a>", {
+        text : "Enqueue"
+    }).buttonMarkup({
+        inline : true,
+        icon : "check"
+    }).bind("click", function() {
+        console.log("enqeue: " + entry.file);
+        entry.url = 'http://cart1.slotcar.prv:3000/audio';
+        enqueue(entry);
     }).appendTo($config);
 
     $('#pass-choice-'+choices[entry.pass]).attr('checked', true);
