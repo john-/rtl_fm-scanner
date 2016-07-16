@@ -148,23 +148,11 @@ helper select => sub {
 
     my $watcher = Inotifier::Model::FileWatch->new($self->app);
 
-    return $watcher->get_freqs;
+    my $freqs = $watcher->get_freqs;
+    foreach (@$freqs) { $_->{url} = app->defaults->{audio_url} };  # more hack
+
+    return $freqs;
 };
-
-#helper update_pass => sub {
-#    my ( $self, $freq, $bank, $pass ) = @_;
-
-#    app->log->info(
-#        sprintf( 'change pass for %s (%s) to %s', $freq, $bank, $pass ) );
-
-#    $self->pg->db->query( 'UPDATE freqs SET pass=? WHERE freq = ? AND bank = ?',
-#        $pass, $freq, $bank );
-
-#    app->set_blocklist;
-    #app->load_freqs;
-#    $self->pubsub->notify(msg => encode_json( {type => 'update'} ));
-    #$self->start_rtlfm;
-#};
 
 helper clear_auto_pass => sub {
     my $self = shift;
@@ -181,13 +169,6 @@ helper clear_auto_pass => sub {
 
     $self->pubsub->notify(msg => encode_json( {type => 'update'} ));
 };
-
-#helper load_freqs => sub {
-
-#    app->defaults( freq_list => \@{ app->select('not used') } );
-#};
-
-#app->load_freqs;
 
 app->start;
 
@@ -360,9 +341,8 @@ frequency_config = function(entry) {
         inline : true,
         icon : "check"
     }).bind("click", function() {
-        console.log("enqeue: " + entry.file);
-        entry.url = 'http://cart1.slotcar.prv:3000/audio';
         enqueue(entry);
+        $config.popup('close');
     }).appendTo($config);
 
     $('#pass-choice-'+choices[entry.pass]).attr('checked', true);
