@@ -121,7 +121,6 @@ sub set_pass {
 
     my $results = $self->{pg}->db->query( 'select freq from freqs where pass = 1 order by freq asc');
     while (my $next = $results->array) {
-	$self->{app}->log->debug($next->[0]);
 	print $fh "$next->[0]E6\n";
     }
     close($fh);
@@ -129,4 +128,15 @@ sub set_pass {
     # poke the screen session with scanner to reload the blocklist
     system( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff', '"l"' );
 }
+
+sub set_label {
+    my ( $self, $freq, $bank, $label ) = @_;
+
+    $self->{app}->log->info(
+	sprintf( 'change label for %s (%s) to %s', $freq, $bank, $label ) );
+
+    $self->{pg}->db->query( 'UPDATE freqs SET label=? WHERE freq = ? AND bank = ?',
+			          $label, $freq, $bank );
+}
+
 1;

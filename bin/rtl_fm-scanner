@@ -116,6 +116,13 @@ websocket '/output' => sub {
 
                 $c->pubsub->notify(msg => encode_json( app->config_msg ));
             }
+            elsif ( $hash->{type} eq 'set_label' ) {
+
+                app->log->debug('label now: ' . $hash->{label});
+		$watcher->set_label( $hash->{freq}, $hash->{bank}, $hash->{label} );
+                $c = $c->send( { json => {type => 'update'} } );
+
+            }
 
             #app->log->debug("Message: ".dumper($hash));
         }
@@ -273,9 +280,19 @@ frequency_config = function(entry) {
         $(this).remove();
     });
 
-    $("<h2/>", {
-        text : entry.label + ' (' + entry.freq + ')'
+    $("<h3/>", {
+        text : entry.freq
     }).appendTo($config);
+
+    $('<h3/>').append(
+        $('<input/>', {
+        type : 'text',
+        name : 'label',
+        id : 'label',
+        value : entry.label,
+    })
+    ).appendTo($config);
+
 
     //create a form for the pop up
     var $form = $('<form/>');
@@ -322,6 +339,18 @@ frequency_config = function(entry) {
             } ));
 
         }
+        var new_label = $('input[name=label]').val();
+        if ( entry.label != new_label ) {
+
+            scan_ws.send(JSON.stringify( {
+                type: "set_label",
+                freq: entry.freq,
+                bank: entry.bank,
+                label: new_label
+            } ));
+
+        }
+
     }).appendTo($config);
 
     //create a cancel button
