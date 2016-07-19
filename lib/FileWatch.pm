@@ -64,12 +64,14 @@ sub file_added {
 	%$entry,
     };
 
+    $xmit->{xmit_key} = $self->{pg}->db->query(
+        'insert into xmit_history (freq_key, source, file, start, stop) values (?, ?, ?, to_timestamp(?), to_timestamp(?)) returning xmit_key',
+	    $xmit->{freq_key}, 'dongle1', $file, $xmit->{stop}, $xmit->{stop}    # with approach probably no start time
+    )->hash->{xmit_key};
+    $self->{app}->log->debug( sprintf('xmit_key: %d', $xmit->{xmit_key}) );
+
     $self->{cb}->($xmit);
 
-    $self->{pg}->db->query(
-        'INSERT INTO xmit_history (freq_key, source, file, start, stop) values (?, ?, ?, to_timestamp(?), to_timestamp(?))',
-	    $entry->{freq_key}, 'dongle1', $file, $xmit->{stop}, $xmit->{stop}    # with approach probably no start time
-    );
 }
 
 sub watch {
