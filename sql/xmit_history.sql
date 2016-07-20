@@ -3,8 +3,7 @@ CREATE TABLE xmit_history (
         freq_key		INTEGER REFERENCES freqs (freq_key),
 	source			TEXT NOT NULL DEFAULT 'scanner',
         file                    TEXT NOT NULL,
-	start			TIMESTAMPTZ NOT NULL,
-	stop			TIMESTAMPTZ NOT NULL,
+	duration		INTERVAL,
 	entered			TIMESTAMPTZ NOT NULL DEFAULT current_timestamp
 );
 

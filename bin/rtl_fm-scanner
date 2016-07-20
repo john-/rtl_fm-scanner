@@ -225,7 +225,8 @@ scanner_page = function () {
 	    $.each( json, function(i, detail) {
 
                 var info = detail.freq.toString();
-                if (detail.count) { info += ' / ' + detail.count + ' hits' }
+                info += ' (' + detail.duration + ')';
+                //if (detail.count) { info += ' / ' + detail.count + ' hits' }
                 switch (detail.pass) {
                     case 1:
                         info += ' / Manual Pass';

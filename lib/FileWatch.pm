@@ -4,6 +4,7 @@ use Linux::Inotify2;
 use EV;
 use AnyEvent;
 use Mojo::Pg;
+use Audio::Wav;
 
 use strict;
 use warnings;
@@ -19,6 +20,7 @@ sub new {
     my $self = {
 	app => $app,
 	pg  => $pg,
+	prev_name => 'first time through',
     };
 
     return bless $self, $class;
@@ -29,12 +31,23 @@ sub file_added {
 
     my $file = $event->name;
 
+    $self->{app}->log->debug(sprintf('file: %s', $file));
+
     unless (-e $event->fullname) {
 	# there is code in ham2mon to delete wav files with header
 	# only (44 bytes).
 	$self->{app}->log->debug( sprintf('a header only file was removed by ham2mon: %s', $file) );
 	return;
     }
+
+    if ($file eq $self->{prev_name}) {
+	# this only handles case where same name comes up multiple times in a row.
+	# the general case of other file(s) in between is not covered.
+	# maybe handle it on DB insert (put unique constraint on file name
+	$self->{app}->log->debug( sprintf('a file with same name just happened: %s', $file) );
+	return;
+    }
+    $self->{prev_name} = $file;
 
     my ($freq) = $file =~ /(.*)_.*\.wav/;
 
@@ -60,15 +73,19 @@ sub file_added {
         'freq' => $freq,
         'file' => $file,
         'type' => 'audio',
-        'stop' => time(),
 	%$entry,
     };
 
+    my $wav = Audio::Wav->new;
+    my $read = $wav->read( $event->fullname );
+    my $duration = $read->length_seconds;
+    $xmit->{duration} = $duration;
+    $self->{app}->log->debug( sprintf('wav file duration: %d', $duration) );
+
     $xmit->{xmit_key} = $self->{pg}->db->query(
-        'insert into xmit_history (freq_key, source, file, start, stop) values (?, ?, ?, to_timestamp(?), to_timestamp(?)) returning xmit_key',
-	    $xmit->{freq_key}, 'dongle1', $file, $xmit->{stop}, $xmit->{stop}    # with approach probably no start time
+        'insert into xmit_history (freq_key, source, file, duration) values (?, ?, ?, ?) returning xmit_key',
+	    $xmit->{freq_key}, 'dongle1', $file, $duration
     )->hash->{xmit_key};
-    $self->{app}->log->debug( sprintf('xmit_key: %d', $xmit->{xmit_key}) );
 
     $self->{cb}->($xmit);
 
@@ -104,7 +121,7 @@ sub get_freqs {
     my ($self, $mode) = @_;
 
     return $self->{pg}->db->query(
-	'select freqs.freq_key, xmit_key, freq, label, bank, pass, file from xmit_history, freqs where xmit_history.freq_key = freqs.freq_key order by xmit_key desc limit 10'
+	'select freqs.freq_key, xmit_key, freq, label, bank, pass, file, round(extract(epoch from duration)::numeric,1) as duration from xmit_history, freqs where xmit_history.freq_key = freqs.freq_key order by xmit_key desc limit 10'
 	)->hashes->to_array;
 }
 
