@@ -80,10 +80,11 @@ sub file_added {
     my $read = $wav->read( $event->fullname );
     my $duration = $read->length_seconds;
     $xmit->{duration} = $duration;
+    $read->{handle}->close;    # http://www.perlmonks.org/bare/?node_id=946696
 
     if ($duration < 0.5) {
         $self->{app}->log->debug(sprintf('throwing away a short transmission: %.2f', $duration ));
-	return;
+        return;
     }
 
     $xmit->{xmit_key} = $self->{pg}->db->query(

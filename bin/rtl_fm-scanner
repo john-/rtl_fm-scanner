@@ -74,13 +74,7 @@ websocket '/output' => sub {
     $c->{cb}{$client} = $watcher->watch(
         sub {
             my $msg = shift;
-	    # TODO:  Maybe throw away short transmissions?
-	    #if ($msg->{duration} < 0.5) {
-            #    $c->app->log->debug("transmission too short: $msg->{duration}");
-	    #	return;
-	    #}
             $msg->{url} = $c->app->defaults->{audio_url};
-	    #print "hello there: " . $msg->{freq} . "\n";
             $c = $c->send( { json => $msg } );
             $c->app->log->debug("item to let client know about (watcher): $msg->{type}");
         }
