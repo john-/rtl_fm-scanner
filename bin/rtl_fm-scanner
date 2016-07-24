@@ -74,6 +74,11 @@ websocket '/output' => sub {
     $c->{cb}{$client} = $watcher->watch(
         sub {
             my $msg = shift;
+	    # TODO:  Maybe throw away short transmissions?
+	    #if ($msg->{duration} < 0.5) {
+            #    $c->app->log->debug("transmission too short: $msg->{duration}");
+	    #	return;
+	    #}
             $msg->{url} = $c->app->defaults->{audio_url};
 	    #print "hello there: " . $msg->{freq} . "\n";
             $c = $c->send( { json => $msg } );
@@ -197,6 +202,7 @@ scan_ws.onmessage = function (event) {
 
     switch (msg.type) {
         case 'audio':
+            msg.extra = '/ ' + msg.freq + ' (' + msg.duration.toFixed(1) + ')';
             enqueue(msg);
             scanner_page();
             break;

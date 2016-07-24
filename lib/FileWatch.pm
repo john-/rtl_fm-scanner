@@ -80,7 +80,11 @@ sub file_added {
     my $read = $wav->read( $event->fullname );
     my $duration = $read->length_seconds;
     $xmit->{duration} = $duration;
-    $self->{app}->log->debug( sprintf('wav file duration: %d', $duration) );
+
+    if ($duration < 0.5) {
+        $self->{app}->log->debug(sprintf('throwing away a short transmission: %.2f', $duration ));
+	return;
+    }
 
     $xmit->{xmit_key} = $self->{pg}->db->query(
         'insert into xmit_history (freq_key, source, file, duration) values (?, ?, ?, ?) returning xmit_key',
