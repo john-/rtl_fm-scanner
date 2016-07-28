@@ -125,19 +125,63 @@ sub unwatch {
 sub get_freqs {
     my ($self, $mode) = @_;
 
+    # TODO:  add config option to view by frequencies with a pass on them
+#    return $self->{pg}->db->query(
+#	'select freq_key, freq, label, bank, pass from freqs where pass <> 0 order by freq desc'
+#	)->hashes->to_array;
+
     return $self->{pg}->db->query(
 	'select freqs.freq_key, xmit_key, freq, label, bank, pass, file, round(extract(epoch from duration)::numeric,1) as duration from xmit_history, freqs where xmit_history.freq_key = freqs.freq_key order by xmit_key desc limit 10'
 	)->hashes->to_array;
 }
 
+sub get_banks {
+    my $self = shift;
+
+    #TODO: Yes, this all is very contrived.  Need to get a better handle on better way.
+    my $array = $self->{pg}->db->query(
+	'select distinct(bank) from freqs order by bank asc'
+	)->arrays->to_array;
+
+    my @result;
+    foreach my $element (@$array) {
+	push @result, $element->[0];
+    }
+
+    return \@result;
+}
+
+sub set {
+    my ( $self, $fields ) = @_;
+
+    if (exists($fields->{pass})) {
+	$self->set_pass( $fields->{freq_key}, $fields->{pass} );
+    }
+    if (exists($fields->{label})) {
+        $self->{app}->log->info(
+	    sprintf( 'change label for %s to %s', $fields->{freq_key}, $fields->{label} ) );
+
+        $self->{pg}->db->query( 'UPDATE freqs SET label=? WHERE freq_key = ?',
+                                  $fields->{label}, $fields->{freq_key} );
+    }
+    if (exists($fields->{bank})) {
+        $self->{app}->log->info(
+	    sprintf( 'change bank for %s to %s', $fields->{freq_key}, $fields->{bank} ) );
+
+        $self->{pg}->db->query( 'UPDATE freqs SET bank=? WHERE freq_key = ?',
+                                  $fields->{bank}, $fields->{freq_key} );
+    }
+
+}
+
 sub set_pass {
-    my ( $self, $freq, $bank, $pass ) = @_;
+    my ( $self, $freq_key, $pass ) = @_;
 
     $self->{app}->log->info(
-	sprintf( 'change pass for %s (%s) to %s', $freq, $bank, $pass ) );
+	sprintf( 'change pass for %s to %s', $freq_key, $pass ) );
 
-    $self->{pg}->db->query( 'UPDATE freqs SET pass=? WHERE freq = ? AND bank = ?',
-			          $pass, $freq, $bank );
+    $self->{pg}->db->query( 'UPDATE freqs SET pass=? WHERE freq_key = ?',
+			          $pass, $freq_key );
 
     # now create blocklist for scanner
     open(my $fh, '>', '/home/pub/ham2mon/apps/lockout.txt')

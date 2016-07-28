@@ -94,14 +94,9 @@ websocket '/output' => sub {
             if ( $hash->{type} eq 'ping' ) {
                 app->log->debug('client pinged me');
             }
-            elsif ( $hash->{type} eq 'set_pass' ) {
-                #app->update_pass( $hash->{freq}, $hash->{bank}, $hash->{pass} );
-
-		$watcher->set_pass( $hash->{freq}, $hash->{bank}, $hash->{pass} );
+            elsif ( $hash->{type} eq 'set' ) {
+                $watcher->set( $hash );
                 $c = $c->send( { json => {type => 'update'} } );
-
-		#$c->pubsub->notify(msg => encode_json( {type => 'update'} ));
-                #$c->start_rtlfm;
             }
             elsif ( $hash->{type} eq 'clear_auto_pass' ) {
                 app->log->debug('about to clear auto pass');
@@ -115,15 +110,6 @@ websocket '/output' => sub {
 
                 $c->pubsub->notify(msg => encode_json( app->config_msg ));
             }
-            elsif ( $hash->{type} eq 'set_label' ) {
-
-                app->log->debug('label now: ' . $hash->{label});
-		$watcher->set_label( $hash->{freq}, $hash->{bank}, $hash->{label} );
-                $c = $c->send( { json => {type => 'update'} } );
-
-            }
-
-            #app->log->debug("Message: ".dumper($hash));
         }
     );
 
@@ -141,6 +127,9 @@ websocket '/output' => sub {
 helper config_msg => sub {
     my $self = shift;
 
+    my $banks = $self->watcher->get_banks;
+    $config->{banks} = $banks;
+
     return { type => 'config', %{$config} };
 };
 
@@ -149,12 +138,16 @@ helper pg => sub {
       or app->log->error('Could not connect to database');
 };
 
+helper watcher => sub {
+    state $watcher = Inotifier::Model::FileWatch->new(app);
+};
+
 helper select => sub {
     my ( $self, $bank ) = @_;
 
-    my $watcher = Inotifier::Model::FileWatch->new($self->app);
+    #my $watcher = Inotifier::Model::FileWatch->new($self->app);
 
-    my $freqs = $watcher->get_freqs;
+    my $freqs = $self->watcher->get_freqs;
     foreach (@$freqs) { $_->{url} = app->defaults->{audio_url} };  # more hack
 
     return $freqs;
@@ -294,6 +287,21 @@ frequency_config = function(entry) {
     })
     ).appendTo($config);
 
+    $('<label>', {
+        for: 'bank',
+        text : 'Bank',
+        class: 'select'
+    }).appendTo($config);
+
+    $('<select name="bank" id="banks"></select>').appendTo($config);;
+
+    $.each( scan_config.banks, function(name, detail) {
+       $('<option/>', {
+                        text: detail,
+                        value: detail
+                    })
+                    .appendTo("#banks");
+    });
 
     //create a form for the pop up
     var $form = $('<form/>');
@@ -329,27 +337,27 @@ frequency_config = function(entry) {
         icon : "check"
     }).bind("click", function() {
         $config.popup("close");
+
+        var changes = {};
+
         var new_pass = $('input[name=pass-choice]:checked').val();
         if ( entry.pass != new_pass ) {
-
-            scan_ws.send(JSON.stringify( { 
-                type: "set_pass",
-                freq: entry.freq,
-                bank: entry.bank,
-                pass: new_pass
-            } ));
-
+            changes.pass = new_pass;
         }
         var new_label = $('input[name=label]').val();
         if ( entry.label != new_label ) {
+            changes.label = new_label;
+        }
+        var new_bank = $('#banks').val();
+        if ( entry.bank != new_bank ) {
+            changes.bank = new_bank;
+        }
 
-            scan_ws.send(JSON.stringify( {
-                type: "set_label",
-                freq: entry.freq,
-                bank: entry.bank,
-                label: new_label
-            } ));
+        if (!jQuery.isEmptyObject(changes) ) {
+            changes.freq_key = entry.freq_key;
+            changes.type = 'set';
 
+            scan_ws.send(JSON.stringify( changes ));
         }
 
     }).appendTo($config);
@@ -376,6 +384,7 @@ frequency_config = function(entry) {
     }).appendTo($config);
 
     $('#pass-choice-'+choices[entry.pass]).attr('checked', true);
+    $('#banks').val(entry.bank);
 
     $config.popup("open").trigger("create");
 
