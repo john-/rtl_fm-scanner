@@ -59,11 +59,13 @@ sub file_added {
     #$self->{app}->log->debug(Dumper($entry));
 
     if (! $entry ) {   # if no entry then create one
-	$entry->{freq_key} = $self->{pg}->db->query('insert into freqs (freq, label, bank, source) values (?, ?, ?, ?) returning freq_key', $freq, 'Unknown', 'TBD', 'search')
+	my $default = $self->{app}->defaults->{config}->{banks}->[0];
+
+	$entry->{freq_key} = $self->{pg}->db->query('insert into freqs (freq, label, bank, source) values (?, ?, ?, ?) returning freq_key', $freq, 'Unknown', $default, 'search')
 	    ->hash->{freq_key};
 
         $entry = { label => 'Unknown',
-                   bank  => 'TBD',
+                   bank  => $default,
 	           freq_key => $entry->{freq_key},
                    pass => 0,
                  }
@@ -93,6 +95,17 @@ sub file_added {
     )->hash->{xmit_key};
 
     $self->{cb}->($xmit);
+
+    # TODO: ugh
+    # we had something worth telling client about.  This hack will
+    # increment freq center point 1Mhz.   This is needed because I am not ready to
+    # deal with ham2mon which needs code to filter uninteresting stuff
+    # out.   Basically, remove need for return statements above.
+    undef $self->{idle_timer};
+    $self->{idle_timer} = AnyEvent->timer (after => 10, cb => sub {
+        system( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff', '"m"' );
+        $self->{app}->log->debug(sprintf('hack timer fired after 10 seconds' ));
+    });
 
 }
 
@@ -132,7 +145,7 @@ sub get_freqs {
 	)->hashes->to_array;
     } else {
         $result = $self->{pg}->db->query(
-	    'select freqs.freq_key, xmit_key, freq, label, bank, pass, file, round(extract(epoch from duration)::numeric,1) as duration from xmit_history, freqs where xmit_history.freq_key = freqs.freq_key order by xmit_key desc limit 10'
+	    'select freqs.freq_key, xmit_key, freq, label, bank, pass, file, round(extract(epoch from duration)::numeric,1) as duration from xmit_history, freqs where xmit_history.freq_key = freqs.freq_key order by xmit_key desc limit 20'
 	    )->hashes->to_array;
     }
     return $result;
@@ -149,6 +162,12 @@ sub get_banks {
     my @result;
     foreach my $element (@$array) {
 	push @result, $element->[0];
+    }
+
+    my $default = $self->{app}->defaults->{config}->{banks}->[0];
+    $self->{app}->log->debug("default bank: $default");
+    if (!grep( /$default/, @result)) {
+	push @result, $default;
     }
 
     return \@result;
