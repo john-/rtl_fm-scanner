@@ -20,6 +20,7 @@ use constant MANUAL_PASS => 1;
 use constant AUTO_PASS   => 2;
 
 my $config = plugin Config => { file => "$Bin/../config/scanner.conf" };
+app->defaults->{config} = $config;
 
 app->log( Mojo::Log->new( path => "$Bin/../log/rtl_fm-scanner.log" ) );
 
@@ -55,7 +56,11 @@ get '/freqs' => sub {
 
     # TODO: Get this from DB or keep memory copy updated
     #app->defaults( freq_list => \@{ app->select('not used') } );
-    $c->render( json => \@{ app->select('not used') } );
+
+    my $freqs = app->watcher->get_freqs( $c->param('mode') );
+    foreach (@$freqs) { $_->{url} = app->defaults->{audio_url} };  # more hack
+
+    $c->render( json => $freqs );
 };
 
 websocket '/output' => sub {
@@ -128,7 +133,9 @@ helper config_msg => sub {
     my $self = shift;
 
     my $banks = $self->watcher->get_banks;
-    $config->{banks} = $banks;
+    $config->{existing_banks} = $banks;
+
+    push @{$config->{banks}}, 'TBD';   # overlay things "recently" found in search
 
     return { type => 'config', %{$config} };
 };
@@ -140,17 +147,6 @@ helper pg => sub {
 
 helper watcher => sub {
     state $watcher = Inotifier::Model::FileWatch->new(app);
-};
-
-helper select => sub {
-    my ( $self, $bank ) = @_;
-
-    #my $watcher = Inotifier::Model::FileWatch->new($self->app);
-
-    my $freqs = $self->watcher->get_freqs;
-    foreach (@$freqs) { $_->{url} = app->defaults->{audio_url} };  # more hack
-
-    return $freqs;
 };
 
 helper clear_auto_pass => sub {
@@ -183,6 +179,8 @@ setInterval(function () {
         }, 45000
 );
 
+var mode = "Scan History";
+
 var scan_config;
 scan_ws.onmessage = function (event) {
     var msg = $.parseJSON(event.data);
@@ -212,7 +210,7 @@ scanner_page = function () {
 
     console.log("Populating scanner page");
 
-    $.getJSON( '<%= url_for('freqs')->to_abs %>' )
+    $.getJSON( '<%= url_for('freqs')->to_abs %>' + '/?mode=' + mode )
         .done(function( json ) {
    	    $('#scanner').empty().append('<ul data-role="listview" id="frequencies"></ol>');
 	    $.each( json, function(i, detail) {
@@ -295,7 +293,7 @@ frequency_config = function(entry) {
 
     $('<select name="bank" id="banks"></select>').appendTo($config);;
 
-    $.each( scan_config.banks, function(name, detail) {
+    $.each( scan_config.existing_banks, function(name, detail) {
        $('<option/>', {
                         text: detail,
                         value: detail
@@ -380,7 +378,7 @@ frequency_config = function(entry) {
         icon : "check"
     }).bind("click", function() {
         enqueue(entry);
-        $config.popup('close');
+        //$config.popup('close');
     }).appendTo($config);
 
     $('#pass-choice-'+choices[entry.pass]).attr('checked', true);
@@ -431,7 +429,26 @@ scanner_config = function() {
         type : 'checkbox',
         name : 'clear_pass',
         id   : 'clear_pass'
-    })).appendTo($config);
+    }))
+    .append($('<label>', {
+        for: 'mode',
+        text : 'Mode',
+        class: 'select'
+    }))
+
+    .append($('<select name="mode" id="mode"></select>'))
+
+    .appendTo($config);
+
+    var modes = [ "Scan History", "Passed Frequencies" ];
+    $.each( modes, function(name, detail) {
+       $('<option/>', {
+                        text: detail,
+                        value: detail
+                    })
+                    .appendTo("#mode");
+    });
+
    //Create a submit button(fake)
     $("<a>", {
         text : "OK"
@@ -454,6 +471,8 @@ scanner_config = function() {
         $config.popup('close');
     }).appendTo($config);
 
+    $('#mode').val(mode);
+
     $config.popup("open").trigger("create");
 };
 
@@ -465,6 +484,11 @@ check_for_changes = function() {
 
     if($('#clear_pass').prop('checked')) {
         scan_ws.send(JSON.stringify( { type: "clear_auto_pass" } ));
+    }
+
+    if ( $('#mode').val() != mode ) {
+        mode = $('#mode').val();
+        scanner_page();
     }
 };
 

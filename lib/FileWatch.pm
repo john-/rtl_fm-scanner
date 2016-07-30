@@ -52,8 +52,8 @@ sub file_added {
     my ($freq) = $file =~ /(.*)_.*\.wav/;
 
     my $entry = $self->{pg}->db->query(
-	'select freq_key, freq, label, bank, pass from freqs where freq = ? limit 1',
-	$freq
+       'select freq_key, freq, label, bank, pass from freqs where freq = ? and bank = any(?::text[]) limit 1',
+       $freq, $self->{app}->defaults->{config}->{banks}
 	)->hash;    #  TODO: under what situations can there be more than one across scanned banks?
 
     #$self->{app}->log->debug(Dumper($entry));
@@ -125,14 +125,17 @@ sub unwatch {
 sub get_freqs {
     my ($self, $mode) = @_;
 
-    # TODO:  add config option to view by frequencies with a pass on them
-#    return $self->{pg}->db->query(
-#	'select freq_key, freq, label, bank, pass from freqs where pass <> 0 order by freq desc'
-#	)->hashes->to_array;
-
-    return $self->{pg}->db->query(
-	'select freqs.freq_key, xmit_key, freq, label, bank, pass, file, round(extract(epoch from duration)::numeric,1) as duration from xmit_history, freqs where xmit_history.freq_key = freqs.freq_key order by xmit_key desc limit 10'
+    my $result;
+    if ($mode eq 'Passed Frequencies') {
+	$result = $self->{pg}->db->query(
+	'select freq_key, freq, label, bank, pass from freqs where pass <> 0 order by freq desc'
 	)->hashes->to_array;
+    } else {
+        $result = $self->{pg}->db->query(
+	    'select freqs.freq_key, xmit_key, freq, label, bank, pass, file, round(extract(epoch from duration)::numeric,1) as duration from xmit_history, freqs where xmit_history.freq_key = freqs.freq_key order by xmit_key desc limit 10'
+	    )->hashes->to_array;
+    }
+    return $result;
 }
 
 sub get_banks {
