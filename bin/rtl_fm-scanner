@@ -54,9 +54,6 @@ get '/audio' => sub {
 get '/freqs' => sub {
     my $c = shift;
 
-    # TODO: Get this from DB or keep memory copy updated
-    #app->defaults( freq_list => \@{ app->select('not used') } );
-
     my $freqs = app->watcher->get_freqs( $c->param('mode') );
     foreach (@$freqs) { $_->{url} = app->defaults->{audio_url} };  # more hack
 
@@ -135,7 +132,7 @@ helper config_msg => sub {
     my $banks = $self->watcher->get_banks;
     $config->{existing_banks} = $banks;
 
-    push @{$config->{banks}}, 'TBD';   # overlay things "recently" found in search
+    #push @{$config->{banks}}, 'TBD';   # overlay things "recently" found in search
 
     return { type => 'config', %{$config} };
 };
@@ -180,8 +177,9 @@ setInterval(function () {
 );
 
 var mode = "Scan History";
-
+var backlog = [];
 var scan_config;
+
 scan_ws.onmessage = function (event) {
     var msg = $.parseJSON(event.data);
 
@@ -189,7 +187,7 @@ scan_ws.onmessage = function (event) {
         case 'audio':
             msg.extra = '/ ' + msg.freq + ' (' + msg.duration.toFixed(1) + ')';
             enqueue(msg);
-            scanner_page();
+            //scanner_page();
             break;
         case 'update':
             scanner_page();
@@ -210,13 +208,13 @@ scanner_page = function () {
 
     console.log("Populating scanner page");
 
-    $.getJSON( '<%= url_for('freqs')->to_abs %>' + '/?mode=' + mode )
-        .done(function( json ) {
+//    $.getJSON( '<%= url_for('freqs')->to_abs %>' + '/?mode=' + mode )
+//        .done(function( json ) {
    	    $('#scanner').empty().append('<ul data-role="listview" id="frequencies"></ol>');
-	    $.each( json, function(i, detail) {
+	    $.each( backlog, function(i, detail) {
 
                 var info = detail.freq.toString();
-                info += ' (' + detail.duration + ')';
+                info += ' (' + detail.duration.toFixed(1) + ')';
                 //if (detail.count) { info += ' / ' + detail.count + ' hits' }
                 switch (detail.pass) {
                     case 1:
@@ -247,14 +245,14 @@ scanner_page = function () {
             $( '#frequencies li a' ).on( "taphold", function( event ) {
                 var id = $( this ).attr('id');
 
-                var entry = $.grep(json, function(obj) {
+                var entry = $.grep(backlog, function(obj) {
                     return id == obj.xmit_key;
                 });
 
                 frequency_config(entry[0]);
             });
 
-        });  // end .done
+//        });  // end .done
 
 
 };
@@ -356,6 +354,16 @@ frequency_config = function(entry) {
             changes.type = 'set';
 
             scan_ws.send(JSON.stringify( changes ));
+
+            // change the backlog list
+	    $.each( backlog, function(i, detail) {
+                if (detail.freq_key == changes.freq_key) {
+                    if (changes.pass)  { detail.pass = Number(changes.pass) }
+                    if (changes.label) { detail.label = changes.label }
+                    if (changes.bank)  { detail.bank = changes.bank }
+                    console.log(detail);
+                }
+            });
         }
 
     }).appendTo($config);
@@ -492,3 +500,9 @@ check_for_changes = function() {
     }
 };
 
+scanner_afterclip = function(msg) {
+
+    if ( backlog.unshift(msg) > 20) { backlog.pop() }
+    scanner_page();
+
+};
