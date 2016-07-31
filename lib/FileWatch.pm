@@ -70,7 +70,7 @@ sub file_added {
                    pass => 0,
                  }
     }
-    
+
     my $xmit = {
         'freq' => $freq,
         'file' => $file,
@@ -80,6 +80,7 @@ sub file_added {
 
     my $wav = Audio::Wav->new;
     my $read = $wav->read( $event->fullname );
+#    my $read = $wav->read( $dest );
     my $duration = $read->length_seconds;
     $xmit->{duration} = $duration;
     $read->{handle}->close;    # http://www.perlmonks.org/bare/?node_id=946696
@@ -88,6 +89,12 @@ sub file_added {
         $self->{app}->log->debug(sprintf('throwing away a short transmission: %.2f', $duration ));
         return;
     }
+
+    my $dest = "/home/pub/ham2mon/apps/wav_trimmed/$file";
+    #my @args = ( '/usr/sbin/sox', $event->fullname, $dest, 'reverse', 'trim', '0.23', 'reverse' );
+    my @args = ( '/usr/sbin/sox', $event->fullname, $dest, 'trim', '0.02', '-0.23' );
+    system( @args );
+    $xmit->{duration} -= 0.25;
 
     $xmit->{xmit_key} = $self->{pg}->db->query(
         'insert into xmit_history (freq_key, source, file, duration) values (?, ?, ?, ?) returning xmit_key',
@@ -101,13 +108,22 @@ sub file_added {
     # increment freq center point 1Mhz.   This is needed because I am not ready to
     # deal with ham2mon which needs code to filter uninteresting stuff
     # out.   Basically, remove need for return statements above.
+    $self->count_down;
+
+}
+
+sub count_down {
+    my $self = shift;
+
     undef $self->{idle_timer};
     $self->{idle_timer} = AnyEvent->timer (after => 10, cb => sub {
         system( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff', '"m"' );
         $self->{app}->log->debug(sprintf('hack timer fired after 10 seconds' ));
+        $self->count_down;
     });
 
 }
+
 
 sub watch {
     my ( $self, $msg ) = @_;
