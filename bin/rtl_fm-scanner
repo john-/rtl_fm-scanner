@@ -209,13 +209,23 @@ scanner_page = function () {
 
     console.log("Populating scanner page");
 
-//    $.getJSON( '<%= url_for('freqs')->to_abs %>' + '/?mode=' + mode )
-//        .done(function( json ) {
+    if (mode == 'Scan History') {
+        render_page(backlog);
+    } else {
+        $.getJSON( '<%= url_for('freqs')->to_abs %>' + '/?mode=' + mode )
+            .done( function (json) { render_page( json ) } );
+    }
+
+};
+
+render_page = function(data) {
    	    $('#scanner').empty().append('<ul data-role="listview" id="frequencies"></ol>');
-	    $.each( backlog, function(i, detail) {
+	    $.each( data, function(i, detail) {
 
                 var info = detail.freq.toString();
-                info += ' (' + detail.duration.toFixed(1) + ')';
+                if (detail.duration) {
+                    info += ' (' + detail.duration.toFixed(1) + ')';
+                }
                 //if (detail.count) { info += ' / ' + detail.count + ' hits' }
                 switch (detail.pass) {
                     case 1:
@@ -246,7 +256,7 @@ scanner_page = function () {
             $( '#frequencies li a' ).on( "taphold", function( event ) {
                 var id = $( this ).attr('id');
 
-                var entry = $.grep(backlog, function(obj) {
+                var entry = $.grep(data, function(obj) {
                     return id == obj.xmit_key;
                 });
 

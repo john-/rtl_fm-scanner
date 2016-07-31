@@ -85,7 +85,7 @@ sub file_added {
     $xmit->{duration} = $duration;
     $read->{handle}->close;    # http://www.perlmonks.org/bare/?node_id=946696
 
-    if ($duration < 0.5) {
+    if ($duration < 1.0) {
         $self->{app}->log->debug(sprintf('throwing away a short transmission: %.2f', $duration ));
         return;
     }
