@@ -24,6 +24,9 @@ app->defaults->{config} = $config;
 
 app->log( Mojo::Log->new( path => "$Bin/../log/rtl_fm-scanner.log" ) );
 
+# Yes, this is really bad and one of the reasons this thing will not work with forking server
+my $watcher = Inotifier::Model::FileWatch->new(app);
+
 app->plugin('RenderFile');
 app->plugin('CORS'); # lets the client get around same origin policy restriction
 
@@ -55,7 +58,7 @@ get '/audio' => sub {
 get '/freqs' => sub {
     my $c = shift;
 
-    my $freqs = app->watcher->get_freqs( $c->param('mode') );
+    my $freqs = $watcher->get_freqs( $c->param('mode') );
     foreach (@$freqs) { $_->{url} = app->defaults->{audio_url} };  # more hack
 
     $c->render( json => $freqs );
@@ -72,9 +75,9 @@ websocket '/output' => sub {
     $c->send( { json => app->config_msg } );
 
 
-    my $watcher = Inotifier::Model::FileWatch->new($c->app);
+#    my $watcher = Inotifier::Model::FileWatch->new($c->app);
 
-    $c->{cb}{$client} = $watcher->watch(
+    $c->{cb}{$client} = $watcher->watch( $client, 
         sub {
             my $msg = shift;
             $msg->{url} = $c->app->defaults->{audio_url};
@@ -120,7 +123,7 @@ websocket '/output' => sub {
         finish => sub {
             my ( $c, $code, $reason ) = @_;
 	    #$c->pubsub->unlisten( msg => $cb );
-	    $watcher->unwatch();
+	    $watcher->unwatch($client);
             delete $c->{cb}{$client};
             $c->app->log->debug("WebSocket closed with status $code.");
         }
@@ -130,7 +133,7 @@ websocket '/output' => sub {
 helper config_msg => sub {
     my $self = shift;
 
-    my $banks = $self->watcher->get_banks;
+    my $banks = $watcher->get_banks;
     $config->{existing_banks} = $banks;
 
     #push @{$config->{banks}}, 'TBD';   # overlay things "recently" found in search
@@ -143,9 +146,9 @@ helper pg => sub {
       or app->log->error('Could not connect to database');
 };
 
-helper watcher => sub {
-    state $watcher = Inotifier::Model::FileWatch->new(app);
-};
+#helper watcher => sub {
+#    state $watcher = Inotifier::Model::FileWatch->new(app);
+#};
 
 helper clear_auto_pass => sub {
     my $self = shift;

@@ -23,6 +23,19 @@ sub new {
 	prev_name => 'first time through',
     };
 
+    my $notifier = new Linux::Inotify2;
+
+    $self->{watcher} = $notifier->watch( '/home/pub/ham2mon/apps/wav', IN_CLOSE_WRITE,
+        sub { $self->file_added(@_) } );
+
+    $self->{io} = AnyEvent->io(
+        fh   => $notifier->{fd},
+        poll => 'r',
+        cb   => sub { $notifier->poll }
+    );
+
+    $self->{app}->log->debug('Watching new files for all clients');
+
     return bless $self, $class;
 }
 
@@ -101,7 +114,9 @@ sub file_added {
 	    $xmit->{freq_key}, 'dongle1', $file, $duration
     )->hash->{xmit_key};
 
-    $self->{cb}->($xmit);
+    foreach my $client (keys %{$self->{cb}}) {
+        $self->{cb}{$client}->($xmit);
+    }
 
     # TODO: ugh
     # we had something worth telling client about.  This hack will
@@ -126,29 +141,20 @@ sub count_down {
 
 
 sub watch {
-    my ( $self, $msg ) = @_;
+    my ( $self, $client, $cb ) = @_;
 
-    $self->{cb} = $msg;
+    $self->{cb}{$client} = $cb;
+    $self->{app}->log->debug(sprintf('watchning for %s', $client ));
 
-    my $notifier = new Linux::Inotify2;
-
-    $self->{watcher} = $notifier->watch( '/home/pub/ham2mon/apps/wav', IN_CLOSE_WRITE,
-        sub { $self->file_added(@_) } );
-
-    my $io = AnyEvent->io(
-        fh   => $notifier->{fd},
-        poll => 'r',
-        cb   => sub { $notifier->poll }
-    );
-
-    $self->{app}->log->debug('Watching new files for client');
-    return $io;
+    return $client;   # probably not oding right thing here
 }
 
 sub unwatch {
-    my $self = shift;
+    my ($self, $client) = @_;
 
-    $self->{watcher}->cancel;
+    delete $self->{cb}{$client};
+
+    #$self->{watcher}->cancel;
 }
 
 sub get_freqs {
