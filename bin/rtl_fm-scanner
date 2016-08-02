@@ -459,22 +459,24 @@ scanner_config = function() {
     $('<form>').append(
         $('<label>', {
             for: 'base_freq',
-            text: 'Center (Hz)'
+            text: 'Center (Mhz)'
     }))
     .append($('<input/>', {
         name : 'base_freq',
         id : 'base_freq',
-        value : scan_config.base_freq,
+        value : scan_config.base_freq/1e6,
+        factor: 1e6
     }))
     .append(
         $('<label>', {
             for: 'range',
-            text: 'Range (Hz)'
+            text: 'Range (Mhz)'
     }))
     .append($('<input/>', {
         name : 'range',
         id : 'range',
-        value : scan_config.range,
+        value : scan_config.range/1e6,
+        factor: 1e6
     }))
     .append(
         $('<label>', {
@@ -485,6 +487,7 @@ scanner_config = function() {
         name : 'rate',
         id : 'rate',
         value : scan_config.rate,
+        factor: 1
     }))
     .append($('<label>', {
         for: 'mode',
@@ -544,12 +547,11 @@ check_for_changes = function() {
 
     var changes = {};
     $.each( ['base_freq', 'range', 'rate'], function(i, detail) {
-        new_val = $('#' + detail).val();
+        new_val = $('#' + detail).val() * $('#' + detail).attr('factor');
         if ( new_val != scan_config[detail] ) {
             //console.log(scan_config[detail]);
             changes[detail] = new_val;
         }
-
     });
 
     if (!jQuery.isEmptyObject(changes) ) {

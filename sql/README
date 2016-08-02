@@ -19,3 +19,6 @@ select freqs.freq_key, label, count(xmit_key) from freqs left outer join xmit_hi
 
 select freqs.freq_key, freq, label, bank, pass, count(xmit_key) from freqs left outer join xmit_history on freqs.freq_key = xmit_history.freq_key where bank = 'ATC' group by freqs.freq_key, freqs.label;
 
+Show the typical frequencies for RA IMSA:
+
+select freq, label from freqs where bank='ALMS' or bank='RAMERICA' order by freq asc;
