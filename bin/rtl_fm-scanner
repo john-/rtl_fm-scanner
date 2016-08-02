@@ -74,7 +74,6 @@ websocket '/output' => sub {
 
     $c->send( { json => app->config_msg } );
 
-
 #    my $watcher = Inotifier::Model::FileWatch->new($c->app);
 
     $c->{cb}{$client} = $watcher->watch( $client, 
@@ -100,9 +99,13 @@ websocket '/output' => sub {
             if ( $hash->{type} eq 'ping' ) {
                 app->log->debug('client pinged me');
             }
-            elsif ( $hash->{type} eq 'set' ) {
-                $watcher->set( $hash );
+            elsif ( $hash->{type} eq 'set_freq' ) {
+                $watcher->set_freq( $hash );
                 $c = $c->send( { json => {type => 'update'} } );
+            }
+            elsif ( $hash->{type} eq 'set_mode' ) {
+                $watcher->set_mode( $hash );
+                $c->send( { json => app->config_msg } );
             }
             elsif ( $hash->{type} eq 'clear_auto_pass' ) {
                 app->log->debug('about to clear auto pass');
@@ -365,7 +368,7 @@ frequency_config = function(entry) {
 
         if (!jQuery.isEmptyObject(changes) ) {
             changes.freq_key = entry.freq_key;
-            changes.type = 'set';
+            changes.type = 'set_freq';
 
             scan_ws.send(JSON.stringify( changes ));
 
@@ -430,27 +433,58 @@ scanner_config = function() {
     }).appendTo($config);
 
     //create a form for the pop up
+//    $('<form>').append(
+//        $('<label>', {
+//            for: 'squelch',
+//            text: 'Squelch'
+//    }))
+//    .append($('<input/>', {
+//        type : 'range',
+//        name : 'squelch',
+//        id : 'squelch',
+//        value : scan_config.squelch,
+//        min : '0',
+//        max : '100'
+//    }))
+//    .append($('<label>', {
+//        for : 'clear_pass',
+//        text : 'Clear Auto Pass',
+//    }))
+//    .append($('<input/>', {
+//       type : 'checkbox',
+//        name : 'clear_pass',
+//        id   : 'clear_pass'
+//    }))
+
     $('<form>').append(
         $('<label>', {
-            for: 'squelch',
-            text: 'Squelch'
+            for: 'base_freq',
+            text: 'Center (Hz)'
     }))
     .append($('<input/>', {
-        type : 'range',
-        name : 'squelch',
-        id : 'squelch',
-        value : scan_config.squelch,
-        min : '0',
-        max : '100'
+        name : 'base_freq',
+        id : 'base_freq',
+        value : scan_config.base_freq,
     }))
-    .append($('<label>', {
-        for : 'clear_pass',
-        text : 'Clear Auto Pass',
+    .append(
+        $('<label>', {
+            for: 'range',
+            text: 'Range (Hz)'
     }))
     .append($('<input/>', {
-        type : 'checkbox',
-        name : 'clear_pass',
-        id   : 'clear_pass'
+        name : 'range',
+        id : 'range',
+        value : scan_config.range,
+    }))
+    .append(
+        $('<label>', {
+            for: 'rate',
+            text: 'Rate (Sec)'
+    }))
+    .append($('<input/>', {
+        name : 'rate',
+        id : 'rate',
+        value : scan_config.rate,
     }))
     .append($('<label>', {
         for: 'mode',
@@ -500,12 +534,28 @@ scanner_config = function() {
 
 check_for_changes = function() {
 
-    if ( $('#squelch').val() != scan_config.squelch ) {
-        scan_ws.send(JSON.stringify( { type: "set_squelch", squelch: $('#squelch').val() } ));
-    }
+//    if ( $('#squelch').val() != scan_config.squelch ) {
+//        scan_ws.send(JSON.stringify( { type: "set_squelch", squelch: $('#squelch').val() } ));
+//    }
 
-    if($('#clear_pass').prop('checked')) {
-        scan_ws.send(JSON.stringify( { type: "clear_auto_pass" } ));
+//    if($('#clear_pass').prop('checked')) {
+//        scan_ws.send(JSON.stringify( { type: "clear_auto_pass" } ));
+//    }
+
+    var changes = {};
+    $.each( ['base_freq', 'range', 'rate'], function(i, detail) {
+        new_val = $('#' + detail).val();
+        if ( new_val != scan_config[detail] ) {
+            //console.log(scan_config[detail]);
+            changes[detail] = new_val;
+        }
+
+    });
+
+    if (!jQuery.isEmptyObject(changes) ) {
+        changes.type = 'set_mode';
+
+        scan_ws.send(JSON.stringify( changes ));
     }
 
     if ( $('#mode').val() != mode ) {

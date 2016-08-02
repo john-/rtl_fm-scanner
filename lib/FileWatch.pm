@@ -36,7 +36,16 @@ sub new {
 
     $self->{app}->log->debug('Watching new files for all clients');
 
-    return bless $self, $class;
+    bless $self, $class;
+
+    $self->create_lockout;
+    $self->set_mode( { base_freq => $self->{app}->defaults->{config}->{base_freq}, # remember starting point
+	               range => $self->{app}->defaults->{config}->{range},
+	               rate => $self->{app}->defaults->{config}->{rate},
+		     } );
+    #$self->count_down;
+
+    return $self;
 }
 
 sub file_added {
@@ -127,13 +136,58 @@ sub file_added {
 
 }
 
+sub set_mode {
+    my ($self, $params) = @_;
+
+    # base_freq, range, rate
+    foreach my $param ( ('base_freq', 'range', 'rate') ) {
+        if (exists $params->{$param}) {
+	    $self->{$param} = $params->{$param};
+            $self->{app}->defaults->{config}->{$param} = $params->{$param};
+	}
+    }
+
+    $self->set_center($self->{base_freq});
+
+    $self->count_down;
+}
+
+sub set_center {
+    my ($self, $freq) = @_;
+
+    $self->{freq} = $freq;
+
+    $self->{app}->log->debug(sprintf('setting freq to: %s', $freq/1000000 ));
+
+    open(my $fh, '>', '/home/pub/ham2mon/apps/cur_freq') or $self->{app}->log->error(sprintf('could not open cur_freq' ));
+;
+    {
+        local $/;
+        print $fh sprintf('%s',$freq);
+    }
+    close($fh);
+}
+
 sub count_down {
     my $self = shift;
 
+    # maybe add modes.   For example stay on certain center point.
+
     undef $self->{idle_timer};
-    $self->{idle_timer} = AnyEvent->timer (after => 10, cb => sub {
-        system( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff', '"m"' );
-        $self->{app}->log->debug(sprintf('hack timer fired after 10 seconds' ));
+
+    if ($self->{rate} == 0) { return }
+
+    $self->{idle_timer} = AnyEvent->timer (after => $self->{rate}, cb => sub {
+	if ($self->{freq} >= $self->{base_freq} + $self->{range}/2) {
+	    $self->{freq} = $self->{base_freq} - $self->{range}/2;
+	} else {
+	    $self->{freq} += 1000000;
+	}
+
+	$self->set_center( $self->{freq} );
+
+#        system( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff', '"m"' );
+        $self->{app}->log->debug(sprintf('hack timer fired after %d seconds', $self->{rate} ));
         $self->count_down;
     });
 
@@ -163,7 +217,7 @@ sub get_freqs {
     my $result;
     if ($mode eq 'Passed Frequencies') {
 	$result = $self->{pg}->db->query(
-	'select freq_key, freq, label, bank, pass from freqs where pass <> 0 order by freq desc'
+	'select freq_key, freq, label, bank, pass from freqs where pass <> 0 and bank = any(?::text[]) order by freq desc', $self->{app}->defaults->{config}->{banks}
 	)->hashes->to_array;
     } else {
         $result = $self->{pg}->db->query(
@@ -195,11 +249,18 @@ sub get_banks {
     return \@result;
 }
 
-sub set {
+sub set_freq {
     my ( $self, $fields ) = @_;
 
     if (exists($fields->{pass})) {
-	$self->set_pass( $fields->{freq_key}, $fields->{pass} );
+	#$self->set_pass( $fields->{freq_key}, $fields->{pass} );
+
+        $self->{app}->log->info(
+	    sprintf( 'change pass for %s to %s', $fields->{freq_key}, $fields->{pass} ) );
+
+        $self->{pg}->db->query( 'UPDATE freqs SET pass=? WHERE freq_key = ?',
+				$fields->{pass}, $fields->{freq_key} );
+	$self->create_lockout;
     }
     if (exists($fields->{label})) {
         $self->{app}->log->info(
@@ -218,20 +279,25 @@ sub set {
 
 }
 
-sub set_pass {
-    my ( $self, $freq_key, $pass ) = @_;
+#sub set_pass {
+#    my ( $self, $freq_key, $pass ) = @_;
 
-    $self->{app}->log->info(
-	sprintf( 'change pass for %s to %s', $freq_key, $pass ) );
+#    $self->{app}->log->info(
+#	sprintf( 'change pass for %s to %s', $freq_key, $pass ) );
 
-    $self->{pg}->db->query( 'UPDATE freqs SET pass=? WHERE freq_key = ?',
-			          $pass, $freq_key );
+#    $self->{pg}->db->query( 'UPDATE freqs SET pass=? WHERE freq_key = ?',
+#			          $pass, $freq_key );
+
+#}
+
+sub create_lockout {
+    my $self = shift;
 
     # now create blocklist for scanner
     open(my $fh, '>', '/home/pub/ham2mon/apps/lockout.txt')
 	or die 	$self->{app}->log->error("Can't open > lockout.txt: $!");
 
-    my $results = $self->{pg}->db->query( 'select freq from freqs where pass = 1 order by freq asc');
+    my $results = $self->{pg}->db->query( 'select freq from freqs where pass = 1 and bank = any(?::text[]) order by freq asc', $self->{app}->defaults->{config}->{banks});
     while (my $next = $results->array) {
 	print $fh "$next->[0]E6\n";
     }
