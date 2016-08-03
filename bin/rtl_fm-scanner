@@ -244,7 +244,8 @@ render_page = function(data) {
                 var contents = '<h2>' + detail.label + '</h2><p>' + 
                                info + '</p>';
 
-		$('<li/>')
+//		$('<li id=' + detail.xmit_key + '>')
+		$('<li>')
 		    .append(
 		  	$('<a/>', {
 			    html: contents,
@@ -260,6 +261,7 @@ render_page = function(data) {
             $('#frequencies').listview().listview('refresh');
 
             $( '#frequencies li a' ).on( "taphold", function( event ) {
+//            $( '#frequencies' ).on('click', 'li', function() {
                 var id = $( this ).attr('id');
 
                 var entry = $.grep(data, function(obj) {
@@ -278,9 +280,9 @@ frequency_config = function(entry) {
 
     var choices = [ 'none', 'manual', 'auto' ];
 
-    var $config = $("<div/>").popup({
+    var config = $("<div/>").popup({
         theme : "a",
-        overlyaTheme : "a",
+        overlayTheme : "a",
         transition : "pop"
     }).on("popupafterclose", function() {
         //remove the popup when closing
@@ -289,7 +291,7 @@ frequency_config = function(entry) {
 
     $("<h3/>", {
         text : entry.freq
-    }).appendTo($config);
+    }).appendTo(config);
 
     $('<h3/>').append(
         $('<input/>', {
@@ -298,15 +300,15 @@ frequency_config = function(entry) {
         id : 'label',
         value : entry.label,
     })
-    ).appendTo($config);
+    ).appendTo(config);
 
     $('<label>', {
         for: 'bank',
         text : 'Bank',
         class: 'select'
-    }).appendTo($config);
+    }).appendTo(config);
 
-    $('<select name="bank" id="banks"></select>').appendTo($config);;
+    $('<select name="bank" id="banks"></select>').appendTo(config);;
 
     $.each( scan_config.existing_banks, function(name, detail) {
        $('<option/>', {
@@ -317,14 +319,14 @@ frequency_config = function(entry) {
     });
 
     //create a form for the pop up
-    var $form = $('<form/>');
+    var form = $('<form/>');
 
-    var $radio_btns = $('<fieldset/>', {
+    var radio_btns = $('<fieldset/>', {
             'data-role': 'controlgroup',
             'data-type': 'horizontal'
         });
 
-    $('<legend/>', { text: 'Pass' }).appendTo($radio_btns);
+    $('<legend/>', { text: 'Pass' }).appendTo(radio_btns);
 
     $.each( choices, function( index, choice ) {
         $('<input/>', {
@@ -332,15 +334,15 @@ frequency_config = function(entry) {
             name : 'pass-choice',
             id : 'pass-choice-' + choice,
             value : index,
-        }).appendTo($radio_btns);
+        }).appendTo(radio_btns);
 
         $('<label>', {
             for: 'pass-choice-' + choice,
             text: choice
-        }).appendTo($radio_btns);
+        }).appendTo(radio_btns);
     });
 
-   $radio_btns.appendTo($form).appendTo($config);
+   radio_btns.appendTo(form).appendTo(config);
 
    //Create a submit button(fake)
     $("<a>", {
@@ -349,7 +351,7 @@ frequency_config = function(entry) {
         inline : true,
         icon : "check"
     }).bind("click", function() {
-        $config.popup("close");
+        config.popup("close");
 
         var changes = {};
 
@@ -383,7 +385,7 @@ frequency_config = function(entry) {
             });
         }
 
-    }).appendTo($config);
+    }).appendTo(config);
 
     //create a cancel button
     $("<a>", {
@@ -392,8 +394,8 @@ frequency_config = function(entry) {
         inline : true,
         icon : "back"
     }).bind('click', function() {
-        $config.popup('close');
-    }).appendTo($config);
+        config.popup('close');
+    }).appendTo(config);
 
    //Create a play button
     $("<a>", {
@@ -403,13 +405,14 @@ frequency_config = function(entry) {
         icon : "check"
     }).bind("click", function() {
         enqueue(entry);
-        //$config.popup('close');
-    }).appendTo($config);
+        //config.popup('close');
+    }).appendTo(config);
 
     $('#pass-choice-'+choices[entry.pass]).attr('checked', true);
     $('#banks').val(entry.bank);
 
-    $config.popup("open").trigger("create");
+    config.popup("open").trigger("create");
+//    alert(entry);
 
     $('#pass-choice-auto').checkboxradio('disable');
 };
