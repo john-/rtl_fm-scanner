@@ -147,23 +147,61 @@ sub set_mode {
 	}
     }
 
-    $self->set_center($self->{base_freq});
+    #$self->set_center($self->{base_freq});
+
+    my $start = $self->{base_freq} - $self->{range} / 2 + 0.5 * $self->{app}->defaults->{config}->{width};
+    my $finish = $self->{base_freq} + $self->{range} / 2 - 0.5 * $self->{app}->defaults->{config}->{width};
+    my $num_moves = ($finish - $start) / $self->{app}->defaults->{config}->{width} + 1;
+    my $distance = ($finish - $start) / ($num_moves - 1);
+
+    my @centers = ();
+    my $center = $start;
+    for (my $i=1; $i <= $num_moves; $i++) {
+        push @centers, $center;
+	$center += $distance;
+    }
+    $self->{num_moves} = $num_moves;
+    $self->{center_points} = \@centers;
+    $self->{cur_move} = 0;
+
+    $self->{app}->log->debug(sprintf('centers: %s', Dumper($self->{center_points})));
+
+    $self->set_center;
 
     $self->count_down;
+
+    # start at lower bound + 1/2 bandwidth:  lower_start =  base_freq - range/2 + 1/2 * width
+    # go to upper bound - 1/2 bandwidth:  upper_finish = base_freq + range/2 - 1/2 * width
+    # divide that range into chunks.   Overlap is OK.
+    # number_of_moves = (upper_finish - lower_start) / 1e6 + 1
+    # distance_between = (upper_finish - lower_start) / (number_of_moves - 1)
+
+    # example: base_freq = 465   range = 10  width = 1
+    # lower_start = 465 - 10/2 + .5 = 460.5
+    # upper_finish = 465 + 10/2 - .5 = 469.5
+    # number_of_moves = (469.5 - 460.5) / 1 + 1  = 10
+    # distance = (469.5 - 460.5) / (10 - 1)
+    # 460.5 461.5 462.5 463.5 464.5 465.5 466.5 467.5 468.5 469.5
 }
 
 sub set_center {
-    my ($self, $freq) = @_;
+    my $self = shift;
 
-    $self->{freq} = $freq;
+    $self->{cur_move}++;
 
-    $self->{app}->log->debug(sprintf('setting freq to: %s', $freq/1000000 ));
+    if ($self->{cur_move} > $self->{num_moves}) {
+	$self->{cur_move} = 1;
+    }
+
+    $self->{freq} = $self->{center_points}->[$self->{cur_move}-1];
+
+    $self->{app}->log->debug(sprintf('setting freq to: %s', $self->{freq}/1000000 ));
 
     open(my $fh, '>', '/home/pub/ham2mon/apps/cur_freq') or $self->{app}->log->error(sprintf('could not open cur_freq' ));
 ;
     {
         local $/;
-        print $fh sprintf('%s',$freq);
+        print $fh sprintf('%s',$self->{freq});
     }
     close($fh);
 }
@@ -178,13 +216,7 @@ sub count_down {
     if ($self->{rate} == 0) { return }
 
     $self->{idle_timer} = AnyEvent->timer (after => $self->{rate}, cb => sub {
-	if ($self->{freq} >= $self->{base_freq} + $self->{range}/2) {
-	    $self->{freq} = $self->{base_freq} - $self->{range}/2;
-	} else {
-	    $self->{freq} += 1000000;
-	}
-
-	$self->set_center( $self->{freq} );
+	$self->set_center;
 
 #        system( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff', '"m"' );
         $self->{app}->log->debug(sprintf('hack timer fired after %d seconds', $self->{rate} ));
