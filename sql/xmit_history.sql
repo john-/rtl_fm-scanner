@@ -4,6 +4,8 @@ CREATE TABLE xmit_history (
 	source			TEXT NOT NULL DEFAULT 'scanner',
         file                    TEXT NOT NULL,
 	duration		INTERVAL,
+	detect_voice		BOOLEAN,
+	is_voice		BOOLEAN,
 	entered			TIMESTAMPTZ NOT NULL DEFAULT current_timestamp
 );
 

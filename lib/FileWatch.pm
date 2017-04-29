@@ -38,7 +38,8 @@ sub new {
 
     bless $self, $class;
 
-    $self->create_lockout;
+    # temp disable to debug voice detection
+    #$self->create_lockout;
 
     my $default_setup = $self->{app}->defaults->{config}->{default_setup};
     my %setups = %{$self->{app}->defaults->{config}->{setups}};
@@ -119,9 +120,19 @@ sub file_added {
     system( @args );
     $xmit->{duration} -= 0.25;
 
+    # try to detect voice vs. data
+    my $voice_detected;
+    if ($self->detect_voice($event->fullname)) {
+	$voice_detected = 1;
+    } else {
+	# flag as voice detected.
+	$voice_detected = 0;
+	$xmit->{label} .= '   detected DATA';
+    }
+
     $xmit->{xmit_key} = $self->{pg}->db->query(
-        'insert into xmit_history (freq_key, source, file, duration) values (?, ?, ?, ?) returning xmit_key',
-	    $xmit->{freq_key}, 'dongle1', $file, $duration
+        'insert into xmit_history (freq_key, source, file, duration, detect_voice) values (?, ?, ?, ?, ?) returning xmit_key',
+	    $xmit->{freq_key}, 'dongle1', $file, $duration, $voice_detected
     )->hash->{xmit_key};
 
     foreach my $client (keys %{$self->{cb}}) {
@@ -135,6 +146,27 @@ sub file_added {
     # out.   Basically, remove need for return statements above.
     $self->count_down;
 
+}
+
+sub detect_voice {
+    my ($self, $file) = @_;
+
+    my $detect_voice = 1;
+
+    #$self->{app}->log->debug(sprintf('checking if voice: %s', $file ));
+
+    open(my $fh, "sox $file -n trim 0.1 -0.23 norm vad -t 6 -T 0.25 reverse vad -t 5 reverse stats 2>&1 |") or die $!; # best
+    while (my $line = <$fh>) {
+        #$self->{app}->log->debug(sprintf('  %s', $line ));
+	#           if ($line =~ /Probably text, not sound/) {   # for "stat"
+	if ($line =~ /sox WARN stats: no audio/) {   # for "stats"
+	    $detect_voice = 0;
+	} else {
+	    $detect_voice = 1;
+	}
+    }
+
+    return $detect_voice;
 }
 
 sub set_mode {
@@ -225,7 +257,7 @@ sub count_down {
 
     undef $self->{idle_timer};
 
-    if ($self->{num_moves} == 0) { return }
+    if ($self->{num_moves} == 0) { return }    # not iterating through a range
 
     my $rate = $self->{app}->defaults->{config}->{rate};
     $self->{idle_timer} = AnyEvent->timer (after => $rate, cb => sub {
