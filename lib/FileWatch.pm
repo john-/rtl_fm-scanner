@@ -39,10 +39,11 @@ sub new {
     bless $self, $class;
 
     $self->create_lockout;
-    $self->set_mode( { base_freq => $self->{app}->defaults->{config}->{base_freq}, # remember starting point
-	               range => $self->{app}->defaults->{config}->{range},
-	               rate => $self->{app}->defaults->{config}->{rate},
-		     } );
+
+    my $default_setup = $self->{app}->defaults->{config}->{default_setup};
+    my %setups = %{$self->{app}->defaults->{config}->{setups}};
+    $self->set_mode($setups{$default_setup});
+
     #$self->count_down;
 
     return $self;
@@ -140,26 +141,37 @@ sub set_mode {
     my ($self, $params) = @_;
 
     # base_freq, range, rate
-    foreach my $param ( ('base_freq', 'range', 'rate') ) {
-        if (exists $params->{$param}) {
-	    $self->{$param} = $params->{$param};
-            $self->{app}->defaults->{config}->{$param} = $params->{$param};
-	}
-    }
+#    foreach my $param ( ('base_freq', 'range', 'rate') ) {
+#        if (exists $params->{$param}) {
+#	    $self->{$param} = $params->{$param};
+#            $self->{app}->defaults->{config}->{$param} = $params->{$param};
+#	}
+#    }
+
+    my $base_freq = $params->{base_freq};
 
     #$self->set_center($self->{base_freq});
-
-    my $start = $self->{base_freq} - $self->{range} / 2 + 0.5 * $self->{app}->defaults->{config}->{width};
-    my $finish = $self->{base_freq} + $self->{range} / 2 - 0.5 * $self->{app}->defaults->{config}->{width};
-    my $num_moves = ($finish - $start) / $self->{app}->defaults->{config}->{width} + 1;
-    my $distance = ($finish - $start) / ($num_moves - 1);
-
     my @centers = ();
-    my $center = $start;
-    for (my $i=1; $i <= $num_moves; $i++) {
-        push @centers, $center;
-	$center += $distance;
+    my $num_moves = 0;
+    if (exists $params->{range}) {
+	my $range = $params->{range};
+
+        my $start  = $base_freq - $range / 2 + 0.5 * $self->{app}->defaults->{config}->{width};
+        my $finish = $base_freq + $range / 2 - 0.5 * $self->{app}->defaults->{config}->{width};
+        $num_moves = ($finish - $start) / $self->{app}->defaults->{config}->{width} + 1;
+        my $distance = ($finish - $start) / ($num_moves - 1);
+
+        my $center = $start;
+        for (my $i=1; $i <= $num_moves; $i++) {
+            push @centers, $center;
+	    $center += $distance;
+        }
+    } else {
+        $num_moves = 0;
+	@centers = ( $base_freq );
+
     }
+
     $self->{num_moves} = $num_moves;
     $self->{center_points} = \@centers;
     $self->{cur_move} = 0;
@@ -213,13 +225,14 @@ sub count_down {
 
     undef $self->{idle_timer};
 
-    if ($self->{rate} == 0) { return }
+    if ($self->{num_moves} == 0) { return }
 
-    $self->{idle_timer} = AnyEvent->timer (after => $self->{rate}, cb => sub {
+    my $rate = $self->{app}->defaults->{config}->{rate};
+    $self->{idle_timer} = AnyEvent->timer (after => $rate, cb => sub {
 	$self->set_center;
 
 #        system( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff', '"m"' );
-        $self->{app}->log->debug(sprintf('hack timer fired after %d seconds', $self->{rate} ));
+        $self->{app}->log->debug(sprintf('hack timer fired after %d seconds', $rate ));
         $self->count_down;
     });
 
