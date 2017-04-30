@@ -467,7 +467,7 @@ scanner_config = function() {
     .append($('<input/>', {
         name : 'base_freq',
         id : 'base_freq',
-        value : scan_config.base_freq/1e6,
+        value : scan_config.setups[scan_config.default_setup].base_freq/1e6,
         factor: 1e6
     }))
     .append(
@@ -478,7 +478,7 @@ scanner_config = function() {
     .append($('<input/>', {
         name : 'range',
         id : 'range',
-        value : scan_config.range/1e6,
+        value : scan_config.setups[scan_config.default_setup].range/1e6,
         factor: 1e6
     }))
     .append(
