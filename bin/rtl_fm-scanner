@@ -215,7 +215,7 @@ scanner_page = function () {
 
     console.log("Populating scanner page");
 
-    if (mode == 'Scan History') {
+    if ( mode == 'Scan History') {
         render_page(backlog);
     } else {
         $.getJSON( '<%= url_for('freqs')->to_abs %>' + '/?mode=' + mode )
@@ -230,7 +230,8 @@ render_page = function(data) {
 
                 var info = detail.freq.toString();
                 if (detail.duration) {
-                    info += ' (' + detail.duration.toFixed(1) + ')';
+                    info += ' (' + (detail.duration*1.0).toFixed(1) + ')';
+                    //info += ' (' + detail.duration + ')';
                 }
                 //if (detail.count) { info += ' / ' + detail.count + ' hits' }
                 switch (detail.pass) {
@@ -421,7 +422,7 @@ scanner_config = function() {
 
     // approach from: http://stackoverflow.com/questions/16015810/jquery-mobile-best-way-to-create-pop-up-and-content-dynamically
 
-    console.log("squelch: " + scan_config.squelch);
+    //console.log("range: " + scan_config.setups[scan_config.default_setup].range);
     var $config = $("<div/>").popup({
         theme : "a",
         overlyaTheme : "a",
@@ -502,7 +503,7 @@ scanner_config = function() {
 
     .appendTo($config);
 
-    var modes = [ "Scan History", "Passed Frequencies" ];
+    var modes = [ "Scan History", "Detected as data", "Passed Frequencies" ];
     $.each( modes, function(name, detail) {
        $('<option/>', {
                         text: detail,

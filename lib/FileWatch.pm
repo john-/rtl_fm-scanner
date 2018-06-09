@@ -38,8 +38,7 @@ sub new {
 
     bless $self, $class;
 
-    # temp disable to debug voice detection
-    #$self->create_lockout;
+    $self->create_lockout;
 
     my $default_setup = $self->{app}->defaults->{config}->{default_setup};
     my %setups = %{$self->{app}->defaults->{config}->{setups}};
@@ -135,6 +134,11 @@ sub file_added {
 	    $xmit->{freq_key}, 'dongle1', $file, $duration, $voice_detected
     )->hash->{xmit_key};
 
+    if (!$voice_detected) {
+        $self->{app}->log->debug(sprintf('detected as data: %s', $file ));
+        return;
+    }
+
     foreach my $client (keys %{$self->{cb}}) {
         $self->{cb}{$client}->($xmit);
     }
@@ -172,21 +176,15 @@ sub detect_voice {
 sub set_mode {
     my ($self, $params) = @_;
 
-    # base_freq, range, rate
-#    foreach my $param ( ('base_freq', 'range', 'rate') ) {
-#        if (exists $params->{$param}) {
-#	    $self->{$param} = $params->{$param};
-#            $self->{app}->defaults->{config}->{$param} = $params->{$param};
-#	}
-#    }
-
     my $base_freq = $params->{base_freq};
 
     #$self->set_center($self->{base_freq});
     my @centers = ();
     my $num_moves = 0;
-    if (exists $params->{range}) {
+    if ($params->{range} != 0) {
 	my $range = $params->{range};
+
+       #$self->{app}->log->debug(sprintf('range: %s', $range));
 
         my $start  = $base_freq - $range / 2 + 0.5 * $self->{app}->defaults->{config}->{width};
         my $finish = $base_freq + $range / 2 - 0.5 * $self->{app}->defaults->{config}->{width};
@@ -231,13 +229,17 @@ sub set_mode {
 sub set_center {
     my $self = shift;
 
-    $self->{cur_move}++;
+    if ($self->{num_moves} == 0) { # not iterating through a range
+        $self->{freq} = $self->{center_points}->[0];
+    } else {
+        $self->{cur_move}++;
 
-    if ($self->{cur_move} > $self->{num_moves}) {
-	$self->{cur_move} = 1;
+        if ($self->{cur_move} > $self->{num_moves}) {
+	    $self->{cur_move} = 1;
+        }
+
+        $self->{freq} = $self->{center_points}->[$self->{cur_move}-1];
     }
-
-    $self->{freq} = $self->{center_points}->[$self->{cur_move}-1];
 
     $self->{app}->log->debug(sprintf('setting freq to: %s', $self->{freq}/1000000 ));
 
@@ -294,11 +296,19 @@ sub get_freqs {
     my $result;
     if ($mode eq 'Passed Frequencies') {
 	$result = $self->{pg}->db->query(
-	'select freq_key, freq, label, bank, pass from freqs where pass <> 0 and bank = any(?::text[]) order by freq desc', $self->{app}->defaults->{config}->{banks}
+	'select freq_key, freq, label, bank, pass from freqs where pass > 0 and bank = any(?::text[]) order by freq desc', $self->{app}->defaults->{config}->{banks}
 	)->hashes->to_array;
     } else {
+	my $type = 'True';
+	if ($mode eq 'Detected as data') {
+	    $type = 'False';
+	}
+        $self->{app}->log->debug("get_freqs type: $type");
+
         $result = $self->{pg}->db->query(
-	    'select freqs.freq_key, xmit_key, freq, label, bank, pass, file, round(extract(epoch from duration)::numeric,1) as duration from xmit_history, freqs where xmit_history.freq_key = freqs.freq_key order by xmit_key desc limit 20'
+#	    'select freqs.freq_key, xmit_key, freq, label, bank, pass, file, round(extract(epoch from duration)::numeric,1) as duration from xmit_history, freqs where xmit_history.freq_key = freqs.freq_key order by xmit_key desc limit 20'
+#	    'select freqs.freq_key, xmit_key, freq, label, bank, pass, file, round(extract(epoch from duration)::numeric,1) as duration from xmit_history, freqs where xmit_history.freq_key = freqs.freq_key and detect_voice = ? order by xmit_key desc limit 20', $type
+	    'select freqs.freq_key, xmit_key, freq, label, bank, pass, file, extract(epoch from duration)::numeric as duration from xmit_history, freqs where xmit_history.freq_key = freqs.freq_key and detect_voice = ? order by xmit_key desc limit 20', $type
 	    )->hashes->to_array;
     }
     return $result;
@@ -317,11 +327,19 @@ sub get_banks {
 	push @result, $element->[0];
     }
 
-    my $default = $self->{app}->defaults->{config}->{banks}->[0];
-    $self->{app}->log->debug("default bank: $default");
-    if (!grep( /$default/, @result)) {
-	push @result, $default;
+    # add any banks from the config
+    my @banks = @{ $self->{app}->defaults->{config}->{banks} };
+    foreach my $bank (@banks) {
+        if (!grep( /$bank/, @result)) {
+	    push @result, $bank;
+        }
     }
+    
+#    my $default = $banks[0];
+#    $self->{app}->log->debug("default bank: $banks[0]");
+#    if (!grep( /$default/, @result)) {
+#	push @result, $default;
+#    }
 
     return \@result;
 }

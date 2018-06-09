@@ -5,9 +5,9 @@ CREATE TABLE xmit_history (
         file                    TEXT NOT NULL,
 	duration		INTERVAL,
 	detect_voice		BOOLEAN,
-	is_voice		BOOLEAN,
+	is_voice		VARCHAR(1),
 	entered			TIMESTAMPTZ NOT NULL DEFAULT current_timestamp
 );
 
-GRANT SELECT,INSERT ON xmit_history TO script;
+GRANT SELECT,INSERT,DELETE ON xmit_history TO script;
 GRANT SELECT,UPDATE ON xmit_history_xmit_key_seq TO script;

@@ -19,6 +19,14 @@ select freqs.freq_key, label, count(xmit_key) from freqs left outer join xmit_hi
 
 select freqs.freq_key, freq, label, bank, pass, count(xmit_key) from freqs left outer join xmit_history on freqs.freq_key = xmit_history.freq_key where bank = 'ATC' group by freqs.freq_key, freqs.label;
 
+What has been happening over the weekend:
+
+select freq, label, bank, pass, count(xmit_key) from freqs left outer join xmit_history on freqs.freq_key = xmit_history.freq_key where bank in ('RAMERICA', 'ELKHART', 'ALMS') and xmit_history.entered > (current_date - interval '3 days') group by freqs.freq_key, freqs.label order by freq asc;
+
 Show the typical frequencies for RA IMSA:
 
 select freq, label from freqs where bank='ALMS' or bank='RAMERICA' order by freq asc;
+
+Working on finding duplicate transmissions.   This happens when signal bleeds over to other freqs:
+
+select file, substring(file,9,10), duration, entered  as stamp from xmit_history order by stamp desc limit 10;
