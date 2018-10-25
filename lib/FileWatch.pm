@@ -265,7 +265,8 @@ sub count_down {
     $self->{idle_timer} = AnyEvent->timer (after => $rate, cb => sub {
 	$self->set_center;
 
-#        system( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff', '"m"' );
+	#        system( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff', '"m"' );
+	#  screen -S scanner -p 1 -X stuff "/200.666\n"
         $self->{app}->log->debug(sprintf('hack timer fired after %d seconds', $rate ));
         $self->count_down;
     });

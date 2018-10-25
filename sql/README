@@ -27,6 +27,18 @@ Show the typical frequencies for RA IMSA:
 
 select freq, label from freqs where bank='ALMS' or bank='RAMERICA' order by freq asc;
 
+# the next section with the regex stuff was moved into trans_browse
+
 Working on finding duplicate transmissions.   This happens when signal bleeds over to other freqs:
 
 select file, substring(file,9,10), duration, entered  as stamp from xmit_history order by stamp desc limit 10;
+
+# this does the right thing with variable size frequencies
+select file, (regexp_matches(file, '^[0-9.]+'))[1] as freq, substring(file,9,10) as timestamp from xmit_history  limit 10;
+
+cart=# select file, (regexp_matches(file, '^[0-9.]+'))[1]::numeric as freq, (regexp_matches(file, '_([0-9]+).wav'))[1] as timestamp from xmit_history  limit 10;
+
+# end of section playing around with regex
+
+# activity during a session:
+select freq, label, bank, pass, count(xmit_key) from freqs left outer join xmit_history on freqs.freq_key = xmit_history.freq_key where bank in ('RAMERICA', 'ELKHART', 'ALMS') and xmit_history.entered >= timestamp '2018-08-05 14:00' and xmit_history.entered <= timestamp '2018-08-05 16:00' group by freqs.freq_key, freqs.label order by freq asc;
