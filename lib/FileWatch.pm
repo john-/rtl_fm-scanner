@@ -243,13 +243,10 @@ sub set_center {
 
     $self->{app}->log->debug(sprintf('setting freq to: %s', $self->{freq}/1000000 ));
 
-    open(my $fh, '>', '/home/pub/ham2mon/apps/cur_freq') or $self->{app}->log->error(sprintf('could not open cur_freq' ));
-;
-    {
-        local $/;
-        print $fh sprintf('%s',$self->{freq});
-    }
-    close($fh);
+    #  screen -S scanner -p 0 -X stuff "/200.666\n"
+    system( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff',
+	       sprintf('"/%s\\n"', $self->{freq}/1000000 )
+	  );
 }
 
 sub count_down {
@@ -266,7 +263,6 @@ sub count_down {
 	$self->set_center;
 
 	#        system( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff', '"m"' );
-	#  screen -S scanner -p 1 -X stuff "/200.666\n"
         $self->{app}->log->debug(sprintf('hack timer fired after %d seconds', $rate ));
         $self->count_down;
     });
