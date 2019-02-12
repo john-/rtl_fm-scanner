@@ -177,6 +177,7 @@ __DATA__
 console.log("Scanner code running");
 
 var scan_ws = new WebSocket('<%= url_for('output')->to_abs %>');
+var scan_audio = '<%= url_for('audio')->to_abs %>';
 
 setInterval(function () {
         scan_ws.send(JSON.stringify( { type: "ping" } ));
@@ -193,6 +194,7 @@ scan_ws.onmessage = function (event) {
     switch (msg.type) {
         case 'audio':
             msg.extra = '/ ' + msg.freq + ' (' + msg.duration.toFixed(1) + ')';
+            msg.url = scan_audio;
             enqueue(msg);
             //scanner_page();
             break;
