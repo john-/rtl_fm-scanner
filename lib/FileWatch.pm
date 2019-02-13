@@ -25,7 +25,7 @@ sub new {
 
     my $notifier = new Linux::Inotify2;
 
-    $self->{watcher} = $notifier->watch( '/home/pub/ham2mon/apps/wav', IN_CLOSE_WRITE,
+    $self->{watcher} = $notifier->watch( '/cart/ham2mon/apps/wav', IN_CLOSE_WRITE,
         sub { $self->file_added(@_) } );
 
     $self->{io} = AnyEvent->io(
@@ -113,9 +113,9 @@ sub file_added {
         return;
     }
 
-    my $dest = "/home/pub/ham2mon/apps/wav_trimmed/$file";
+    my $dest = "/cart/ham2mon/apps/wav_trimmed/$file";
     #my @args = ( '/usr/sbin/sox', $event->fullname, $dest, 'reverse', 'trim', '0.23', 'reverse' );
-    my @args = ( '/usr/sbin/sox', $event->fullname, $dest, 'trim', '0.02', '-0.23' );
+    my @args = ( '/usr/bin/sox', $event->fullname, $dest, 'trim', '0.02', '-0.23' );
     system( @args );
     $xmit->{duration} -= 0.25;
 
@@ -386,7 +386,7 @@ sub create_lockout {
     my $self = shift;
 
     # now create blocklist for scanner
-    open(my $fh, '>', '/home/pub/ham2mon/apps/lockout.txt')
+    open(my $fh, '>', '/cart/ham2mon/apps/lockout.txt')
 	or die 	$self->{app}->log->error("Can't open > lockout.txt: $!");
 
     my $results = $self->{pg}->db->query( 'select freq from freqs where pass = 1 and bank = any(?::text[]) order by freq asc', $self->{app}->defaults->{config}->{banks});

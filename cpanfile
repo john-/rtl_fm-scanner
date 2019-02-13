@@ -1,0 +1,13 @@
+requires 'Mojolicious::Lite';
+requires 'Mojo::IOLoop';
+requires 'Mojo::Util';
+requires 'Mojo::Log';
+requires 'Mojo::Pg';
+requires 'Mojo::JSON';
+requires 'FindBin';
+requires 'Linux::Inotify2';
+requires 'EV';
+requires 'AnyEvent';
+requires 'Audio::Wav';
+requires 'Mojolicious::Plugin::RenderFile';
+requires 'Mojolicious::Plugin::CORS';
