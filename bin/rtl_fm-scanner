@@ -38,7 +38,7 @@ get '/self' => sub {
     $c->render( json => { function => 'Scanner' } );
 
 # ugh this is nasty but I need to store it here because it does not work in the helper
-    app->defaults->{audio_url} = $c->url_for('audio')->to_abs;
+    #app->defaults->{audio_url} = $c->url_for('audio')->to_abs;
 };
 
 get '/script' => { template => 'script' };
@@ -58,7 +58,7 @@ get '/freqs' => sub {
     my $c = shift;
 
     my $freqs = $watcher->get_freqs( $c->param('mode') );
-    foreach (@$freqs) { $_->{url} = app->defaults->{audio_url} };  # more hack
+    #foreach (@$freqs) { $_->{url} = app->defaults->{audio_url} };  # more hack
 
     $c->render( json => $freqs );
 };
@@ -78,7 +78,7 @@ websocket '/output' => sub {
     $c->{cb}{$client} = $watcher->watch( $client, 
         sub {
             my $msg = shift;
-            $msg->{url} = $c->app->defaults->{audio_url};
+            #$msg->{url} = $c->app->defaults->{audio_url};
             $c = $c->send( { json => $msg } );
             $c->app->log->debug("item to let client know about (watcher): $msg->{type}");
         }
@@ -406,6 +406,7 @@ frequency_config = function(entry) {
         inline : true,
         icon : "check"
     }).bind("click", function() {
+        entry.url = scan_audio;
         enqueue(entry);
         //config.popup('close');
     }).appendTo(config);
