@@ -23,9 +23,11 @@ sub new {
 	prev_name => 'first time through',
     };
 
+    my $conf = $self->{app}->defaults->{config};
+
     my $notifier = new Linux::Inotify2;
 
-    $self->{watcher} = $notifier->watch( '/cart/ham2mon/apps/wav', IN_CLOSE_WRITE,
+    $self->{watcher} = $notifier->watch( $conf->{audio_src}, IN_CLOSE_WRITE,
         sub { $self->file_added(@_) } );
 
     $self->{io} = AnyEvent->io(
@@ -40,8 +42,8 @@ sub new {
 
     $self->create_lockout;
 
-    my $default_setup = $self->{app}->defaults->{config}->{default_setup};
-    my %setups = %{$self->{app}->defaults->{config}->{setups}};
+    my $default_setup = $conf->{default_setup};
+    my %setups = %{$conf->{setups}};
     $self->set_mode($setups{$default_setup});
 
     #$self->count_down;
@@ -113,7 +115,7 @@ sub file_added {
         return;
     }
 
-    my $dest = "/cart/ham2mon/apps/wav_trimmed/$file";
+    my $dest = $self->{app}->defaults->{config}->{audio_dst} . "/$file";
     #my @args = ( '/usr/sbin/sox', $event->fullname, $dest, 'reverse', 'trim', '0.23', 'reverse' );
     my @args = ( '/usr/bin/sox', $event->fullname, $dest, 'trim', '0.02', '-0.23' );
     system( @args );

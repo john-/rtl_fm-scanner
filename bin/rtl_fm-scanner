@@ -49,8 +49,7 @@ get '/audio' => sub {
 
     # Open file in browser(do not show save dialog)
     $c->render_file(
-#        'filepath'            => "/home/pub/ham2mon/apps/wav/$file",
-        'filepath'            => "/cart/ham2mon/apps/wav_trimmed/$file",
+        'filepath'            => "$config->{audio_dst}/$file",
         'content_disposition' => 'inline'
     );
 };
