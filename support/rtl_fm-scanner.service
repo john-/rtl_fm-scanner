@@ -4,6 +4,7 @@
     After=postgresql.service
 
 [Service]
+    User=<run as this user>
     ExecStart=/cart/rtl_fm-scanner/bin/rtl_fm-scanner daemon --listen "http://*:3000"
     RestartSec=30sec
     Restart=on-failure
