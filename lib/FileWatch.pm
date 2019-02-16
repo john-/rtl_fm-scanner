@@ -246,9 +246,11 @@ sub set_center {
     $self->{app}->log->debug(sprintf('setting freq to: %s', $self->{freq}/1000000 ));
 
     #  screen -S scanner -p 0 -X stuff "/200.666\n"
-    system( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff',
+    my @args = ( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff',
 	       sprintf('"/%s\\n"', $self->{freq}/1000000 )
 	  );
+    system(@args) == 0
+	or $self->{app}->log->error("system @args failed: $?");
 }
 
 sub count_down {

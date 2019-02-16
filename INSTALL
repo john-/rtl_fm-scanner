@@ -3,6 +3,7 @@ sudo apt install postgresql-server-dev-9.6  # for DBD::Pg
 cpanm --sudo --installdeps .
 
 sudo cp support/rtl_fm-scanner.service /etc/systemd/system
+# change User= to correct user
 
 # requires ham2mon for /cart/ham2mon/apps/lockout.txt
 # ham2mon needs to be running in screen in order to be controlled by rtl_fm-scanner
