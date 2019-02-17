@@ -1,0 +1,20 @@
+#!/bin/sh
+
+# depending on version of rtl_fm-scanner the starting frequency is ignored.   In this case
+# frequency is read by ham2mon from file.
+# -d 0 (nbfm) 1 (am)
+# -a "rtl" or "hackrf"
+# -l /home/pub/ham2mon/apps/lockout.txt
+# -e 10E6    when using ham2mon scan range vs. perl code
+
+# where I ended up with 2017 June Sprints / used for 2018 as well
+#python2 /cart/ham2mon/apps/ham2mon.py -a "rtl" -f 465E6 -g 29.7 -t 25 -d 0 -s -100 -r 1E6 -v 20 -w -m -b 16  -l /cart/ham2mon/apps/lockout.txt ; /usr/bin/bash
+
+# work with hackrf
+python2 /cart/ham2mon/apps/ham2mon.py -a "hackrf" -c -11 --if_gain 16 --bb_gain 6 -f 460.4E6 -g 0.0 -t 20 -d 0 -s -80 -r 1E6 -v 20 -w -m -b 16  -l /cart/ham2mon/apps/lockout.txt
+
+# work with airspy
+#python2 /cart/ham2mon/apps/ham2mon.py -a "airspy" -f 460.4E6 -g 0.0 -t 5 -d 0 -s -100 -r 3E6 -v 20 -w -m -b 16  -l /cart/ham2mon/apps/lockout.txt
+
+# O'hare ATC AM
+#python2 /cart/ham2mon/apps/ham2mon.py -a "rtl" -f 124.75E6 -g 19.7 -t 15 -d 1 -s -100 -r 1E6 -v 16 -w -m -b 16 -l /cart/ham2mon/apps/lockout.txt ; /usr/bin/bash
