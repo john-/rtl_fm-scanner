@@ -1,0 +1,14 @@
+[Unit]
+Description=ham2mon in screen session (ham2mon part 2)
+
+[Service]
+Type=forking
+User=<run as user>
+
+ExecStart=/usr/bin/screen -dmS scanner
+
+ExecStop=/usr/bin/killall -w -s 2 scanner
+WorkingDirectory=/cart
+
+[Install]
+WantedBy=multi-user.target

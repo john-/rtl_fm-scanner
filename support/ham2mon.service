@@ -1,18 +1,19 @@
 [Unit]
-Description=ham2mon in screen session (ham2mon part 2)
-Requires=screen.service
+Description=ham2mon in screen session
 After=screen.service
+Requires=screen.service
 
 [Service]
 Type=forking
 User=<run as this user>
 
-ExecStartPre=/usr/bin/screen -dmS scanner
+WorkingDirectory=/cart/ham2mon/apps
+
 ExecStartPre=/usr/bin/screen -S scanner -p 0 -X stuff "/bin/stty columns 99 rows 26\n"
+ExecStartPre=/usr/bin/screen -S scanner -p 0 -X stuff "/cart/ham2mon/apps\n"
 ExecStart=/usr/bin/screen -S scanner -p 0 -X stuff "/usr/local/bin/ham2mon_start\n"
 
-ExecStop=/usr/bin/killall -w -s 2 scanner
-WorkingDirectory=/cart/ham2mon/apps
+#ExecStop=/usr/bin/killall -w -s 2 scanner
 
 [Install]
 WantedBy=multi-user.target
