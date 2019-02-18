@@ -7,10 +7,10 @@ Requires=screen.service
 Type=forking
 User=<run as this user>
 
-WorkingDirectory=/cart/ham2mon/apps
+#WorkingDirectory=/cart/data
 
 ExecStartPre=/usr/bin/screen -S scanner -p 0 -X stuff "/bin/stty columns 99 rows 26\n"
-ExecStartPre=/usr/bin/screen -S scanner -p 0 -X stuff "/cart/ham2mon/apps\n"
+ExecStartPre=/usr/bin/screen -S scanner -p 0 -X stuff "cd /cart/data\n"
 ExecStart=/usr/bin/screen -S scanner -p 0 -X stuff "/usr/local/bin/ham2mon_start\n"
 
 #ExecStop=/usr/bin/killall -w -s 2 scanner
