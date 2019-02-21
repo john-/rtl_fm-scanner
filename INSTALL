@@ -12,6 +12,10 @@ sudo cp support/ham2mon_start /usr/local/bin
 # requires ham2mon for /cart/ham2mon/apps/lockout.txt
 # ham2mon needs to be running in screen in order to be controlled by rtl_fm-scanner
 
+# directory for audio files files
+mkdir /cart/data/wav
+# move archive subdirs here from old host
+
 sudo systemctl start rtl_fm-scanner
 sudo systemctl enable rtl_fm-scanner
 
