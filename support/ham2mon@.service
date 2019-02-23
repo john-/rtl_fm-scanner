@@ -1,7 +1,7 @@
 [Unit]
 Description=ham2mon in screen session
-After=screen.service
-Requires=screen.service
+After=screen@.service
+Requires=screen@.service
 
 [Service]
 Type=forking
