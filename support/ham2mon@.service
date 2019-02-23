@@ -5,7 +5,7 @@ Requires=screen.service
 
 [Service]
 Type=forking
-User=<run as this user>
+User=%i
 
 #WorkingDirectory=/cart/data
 

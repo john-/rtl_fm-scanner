@@ -9,5 +9,5 @@ CREATE TABLE xmit_history (
 	entered			TIMESTAMPTZ NOT NULL DEFAULT current_timestamp
 );
 
-GRANT SELECT,INSERT,DELETE ON xmit_history TO script;
+GRANT SELECT,UPDATE,INSERT,DELETE ON xmit_history TO script;
 GRANT SELECT,UPDATE ON xmit_history_xmit_key_seq TO script;

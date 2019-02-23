@@ -3,7 +3,7 @@ Description=ham2mon in screen session (ham2mon part 2)
 
 [Service]
 Type=forking
-User=<run as user>
+User=%i
 
 ExecStart=/usr/bin/screen -dmS scanner
 

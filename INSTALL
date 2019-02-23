@@ -2,10 +2,9 @@ sudo apt install postgresql-server-dev-9.6  # for DBD::Pg
 
 cpanm --sudo --installdeps .
 
-sudo cp support/rtl_fm-scanner.service /etc/systemd/system
-sudo cp support/screen.service /etc/systemd/system
-sudo cp support/ham2mon.service /etc/systemd/system
-# change User= to correct user in all 3 unit files
+sudo cp support/rtl_fm-scanner@.service /etc/systemd/system
+sudo cp support/screen@.service /etc/systemd/system
+sudo cp support/ham2mon@.service /etc/systemd/system
 
 sudo cp support/ham2mon_start /usr/local/bin
 
@@ -16,11 +15,12 @@ sudo cp support/ham2mon_start /usr/local/bin
 mkdir /cart/data/wav
 # move archive subdirs here from old host
 
-sudo systemctl start rtl_fm-scanner
-sudo systemctl enable rtl_fm-scanner
+sudo systemctl start ham2mon@<user>.service
+sudo systemctl enable ham2mon@<user>.service
 
-sudo systemctl start screen
-sudo systemctl enable screen
+sudo systemctl start rtl_fm-scanner@<user>.service
+sudo systemctl enable rtl_fm-scanner@<user>.service
 
-sudo systemctl start ham2mon
-sudo systemctl enable ham2mon
+# looks like ham2mon service will start this so don't do it seperately
+#sudo systemctl start screen@<user>.service
+#sudo systemctl enable screen@<user>.service

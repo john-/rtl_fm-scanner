@@ -2,9 +2,10 @@
     Description=Radio scanner (rtl_fm-scanner)
     Requires=postgresql.service
     After=postgresql.service
+    After=ham2mon.service
 
 [Service]
-    User=<run as this user>
+    User=%i
     ExecStart=/cart/rtl_fm-scanner/bin/rtl_fm-scanner daemon --listen "http://*:3000"
     RestartSec=30sec
     Restart=on-failure
