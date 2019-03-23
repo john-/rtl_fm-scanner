@@ -5,7 +5,7 @@ CREATE TABLE xmit_history (
         file                    TEXT NOT NULL,
 	duration		INTERVAL,
 	detect_voice		BOOLEAN,
-	is_voice		VARCHAR(1),
+	class   		VARCHAR(1) DEFAULT 'U',
 	entered			TIMESTAMPTZ NOT NULL DEFAULT current_timestamp
 );
 
