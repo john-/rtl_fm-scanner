@@ -1,0 +1,2 @@
+# ubuntu seems to need root to access sdr.   Thisis with user in plugdev group
+ALL      ALL = (ALL) NOPASSWD: /usr/local/bin/ham2mon_start

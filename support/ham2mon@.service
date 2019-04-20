@@ -11,7 +11,7 @@ User=%i
 
 ExecStartPre=/usr/bin/screen -S scanner -p 0 -X stuff "/bin/stty columns 99 rows 26\n"
 ExecStartPre=/usr/bin/screen -S scanner -p 0 -X stuff "cd /cart/data\n"
-ExecStart=/usr/bin/screen -S scanner -p 0 -X stuff "/usr/local/bin/ham2mon_start\n"
+ExecStart=/usr/bin/screen -S scanner -p 0 -X stuff "sudo /usr/local/bin/ham2mon_start\n"
 
 #ExecStop=/usr/bin/killall -w -s 2 scanner
 
