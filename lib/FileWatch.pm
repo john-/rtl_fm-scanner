@@ -118,7 +118,8 @@ sub file_added {
     my $dest = $self->{app}->defaults->{config}->{audio_dst} . "/$file";
     #my @args = ( '/usr/sbin/sox', $event->fullname, $dest, 'reverse', 'trim', '0.23', 'reverse' );
     my @args = ( '/usr/bin/sox', $event->fullname, $dest, 'trim', '0.02', '-0.23' );
-    system( @args );
+    system( @args )  == 0
+	or $self->{app}->log->error("system @args failed: $?");
     $xmit->{duration} -= 0.25;
 
     # try to detect voice vs. data

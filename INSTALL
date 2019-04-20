@@ -1,4 +1,5 @@
 sudo apt install postgresql-server-dev-9.6  # for DBD::Pg
+sudo apt install sox   # for trimming/detecting audio files
 
 cpanm --sudo --installdeps .
 
