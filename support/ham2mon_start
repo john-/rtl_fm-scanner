@@ -7,20 +7,27 @@
 # -l /home/pub/ham2mon/apps/lockout.txt
 # -e 10E6    when using ham2mon scan range vs. perl code
 
+# work with airspy
+
+python2 /cart/ham2mon/apps/ham2mon.py -a "airspy" -f 467.5E6 --lna_gain 11 --mix_gain 8 --if_gain 6 -t 0 -d 0 -s -70 -r 3E6 -v 20 -w -m -b 16 -n 3 -k 10 -l /cart/ham2mon/apps/lockout.txt
+
+# roof antenna, both FRS local and police (manually change freq to a/b)
+# play with squelch for long trans?
+
+
+# srarted with this for 2019 June Sprints
+#python2 /cart/ham2mon/apps/ham2mon.py -a "airspy" -f 467.5E6 --lna_gain 10 --mix_gain 8 --if_gain 6 -t 0 -d 0 -s -70 -r 3E6 -v 20 -w -m -b 16 -n 3 -k 10 -l /cart/ham2mon/apps/lockout.txt
+
+# frs only and whip antenna
+#python2 /cart/ham2mon/apps/ham2mon.py -a "airspy" -f 467.5E6 --lna_gain 6 --mix_gain 5 --if_gain 6 -t 30 -d 0 -s -70 -r 3E6 -v 20 -w -m -b 16 -n 2 -l /cart/ham2mon/apps/lockout.txt
+
+# pre-airspy stuff
+
 # where I ended up with 2017 June Sprints / used for 2018 as well
 #python2 /cart/ham2mon/apps/ham2mon.py -a "rtl" -f 465E6 -g 29.7 -t 25 -d 0 -s -100 -r 1E6 -v 20 -w -m -b 16  -l /cart/ham2mon/apps/lockout.txt ; /usr/bin/bash
 
 # work with hackrf
 #python2 /cart/ham2mon/apps/ham2mon.py -a "hackrf" -c -11 --if_gain 16 --bb_gain 6 -f 467.5E6 -g 0.0 -t 20 -d 0 -s -80 -r 2E6 -v 20 -w -m -b 16  -l /cart/ham2mon/apps/lockout.txt
-
-# work with airspy
-
-# roof antenna, both FRS local and police (manually change freq to a/b)
-# play with squelc for long trans?
-python2 /cart/ham2mon/apps/ham2mon.py -a "airspy" -f 467.5E6 --lna_gain 10 --mix_gain 8 --if_gain 6 -t 0 -d 0 -s -70 -r 3E6 -v 20 -w -m -b 16 -n 2  -l /cart/ham2mon/apps/lockout.txt
-
-# frs only and whip antenna
-#python2 /cart/ham2mon/apps/ham2mon.py -a "airspy" -f 467.5E6 --lna_gain 6 --mix_gain 5 --if_gain 6 -t 30 -d 0 -s -70 -r 3E6 -v 20 -w -m -b 16 -n 2 -l /cart/ham2mon/apps/lockout.txt
 
 
 # O'hare ATC AM
