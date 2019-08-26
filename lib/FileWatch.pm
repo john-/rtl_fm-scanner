@@ -115,16 +115,9 @@ sub file_added {
         return;
     }
 
-    my $dest = $self->{app}->defaults->{config}->{audio_dst} . "/$file";
-    #my @args = ( '/usr/sbin/sox', $event->fullname, $dest, 'reverse', 'trim', '0.23', 'reverse' );
-    my @args = ( '/usr/bin/sox', $event->fullname, $dest, 'trim', '0.02', '-0.23' );
-    system( @args )  == 0
-	or $self->{app}->log->error("system @args failed: $?");
-    $xmit->{duration} -= 0.25;
-
     # try to detect voice vs. data
     my $voice_detected;
-    if ($self->detect_voice($event->fullname)) {
+    if ($self->detect_voice($event->fullname, $duration)) {
 	$voice_detected = 1;
     } else {
 	# flag as voice detected.
@@ -142,6 +135,14 @@ sub file_added {
         return;
     }
 
+    # This is an audio clip so attempt to remove the key on/off (start/end bit)
+    my $dest = $self->{app}->defaults->{config}->{audio_dst} . "/$file";
+    #my @args = ( '/usr/sbin/sox', $event->fullname, $dest, 'reverse', 'trim', '0.23', 'reverse' );
+    my @args = ( '/usr/bin/sox', $event->fullname, $dest, 'trim', '0.02', '-0.23' );
+    system( @args )  == 0
+	or $self->{app}->log->error("system @args failed: $?");
+    $xmit->{duration} -= 0.25;
+
     foreach my $client (keys %{$self->{cb}}) {
         $self->{cb}{$client}->($xmit);
     }
@@ -156,22 +157,19 @@ sub file_added {
 }
 
 sub detect_voice {
-    my ($self, $file) = @_;
+    my ($self, $file, $duration) = @_;
 
-    my $detect_voice = 1;
+    $my $detect_voice = 1;  # if problem occurs assume voice
 
     #$self->{app}->log->debug(sprintf('checking if voice: %s', $file ));
 
-    open(my $fh, "sox $file -n trim 0.1 -0.23 norm vad -t 6 -T 0.25 reverse vad -t 5 reverse stats 2>&1 |") or die $!; # best
-    while (my $line = <$fh>) {
-        #$self->{app}->log->debug(sprintf('  %s', $line ));
-	#           if ($line =~ /Probably text, not sound/) {   # for "stat"
-	if ($line =~ /sox WARN stats: no audio/) {   # for "stats"
-	    $detect_voice = 0;
-	} else {
-	    $detect_voice = 1;
-	}
-    }
+    # /usr/bin/ffmpeg -i audio.wav -ss 00:00:00 -to 00:00:30 -lavfi showspectrumpic=s=100x50:scale=log:legend=off audio.png
+    my @args = ( '/usr/bin/ffmpeg', '-i', $file, '-ss', $duration/2-0.5, '-to', 1.0,
+                  '-lavfi',  'showspectrumpic=s=100x50:scale=log:legend=off',  '/tmp/classify.png');
+    system( @args )  == 0
+	or $self->{app}->log->error("system @args failed: $?");
+
+    # put png through the CNN
 
     return $detect_voice;
 }
