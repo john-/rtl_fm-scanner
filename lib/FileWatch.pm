@@ -1,13 +1,15 @@
 package Inotifier::Model::FileWatch;
 
+use strict;
+use warnings;
+
 use Linux::Inotify2;
 use EV;
 use AnyEvent;
 use Mojo::Pg;
 use Audio::Wav;
 
-use strict;
-use warnings;
+use TransmissionIdentifier;
 
 use Data::Dumper;
 
@@ -21,6 +23,7 @@ sub new {
 	app => $app,
 	pg  => $pg,
 	prev_name => 'first time through',
+	classifier => TransmissionIdentifier->new( { load_params => 1 } ),
     };
 
     my $conf = $self->{app}->defaults->{config};
@@ -159,17 +162,27 @@ sub file_added {
 sub detect_voice {
     my ($self, $file, $duration) = @_;
 
-    $my $detect_voice = 1;  # if problem occurs assume voice
+    my $detect_voice = 1;  # if problem occurs assume voice
 
     #$self->{app}->log->debug(sprintf('checking if voice: %s', $file ));
 
     # /usr/bin/ffmpeg -i audio.wav -ss 00:00:00 -to 00:00:30 -lavfi showspectrumpic=s=100x50:scale=log:legend=off audio.png
-    my @args = ( '/usr/bin/ffmpeg', '-i', $file, '-ss', $duration/2-0.5, '-to', 1.0,
-                  '-lavfi',  'showspectrumpic=s=100x50:scale=log:legend=off',  '/tmp/classify.png');
+    my $image = '/tmp/classify.png';
+    my $start = $duration/2-0.5;
+    my @args = ( '/usr/bin/ffmpeg',  '-y', '-ss', $start, '-t', 1.0, '-i', $file,
+                  '-lavfi',  'showspectrumpic=s=100x50:scale=log:legend=off',  $image);
     system( @args )  == 0
 	or $self->{app}->log->error("system @args failed: $?");
 
+    $self->{app}->log->debug(sprintf(Dumper(@args)));
+
     # put png through the CNN
+    my $classes = $self->{classifier}->classify($image);
+
+    $self->{app}->log->debug(sprintf('classes: %s', Dumper($classes)));
+    if ($classes->{voice} > 0.5) {
+        $self->{app}->log->debug('This is a voice');
+    }
 
     return $detect_voice;
 }
@@ -392,10 +405,11 @@ sub create_lockout {
     open(my $fh, '>', '/cart/ham2mon/apps/lockout.txt')
 	or die 	$self->{app}->log->error("Can't open > lockout.txt: $!");
 
-    my $results = $self->{pg}->db->query( 'select freq from freqs where pass = 1 and bank = any(?::text[]) order by freq asc', $self->{app}->defaults->{config}->{banks});
-    while (my $next = $results->array) {
-	print $fh "$next->[0]E6\n";
-    }
+    # TODO:  make this configurable
+    #my $results = $self->{pg}->db->query( 'select freq from freqs where pass = 1 and bank = any(?::text[]) order by freq asc', $self->{app}->defaults->{config}->{banks});
+    #while (my $next = $results->array) {
+#	print $fh "$next->[0]E6\n";
+ #   }
     close($fh);
 
     # poke the screen session with scanner to reload the blocklist
