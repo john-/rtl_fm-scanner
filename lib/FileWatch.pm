@@ -123,7 +123,6 @@ sub file_added {
     if ($self->detect_voice($event->fullname, $duration)) {
 	$voice_detected = 1;
     } else {
-	# flag as voice detected.
 	$voice_detected = 0;
 	$xmit->{label} .= '   detected DATA';
     }
@@ -134,7 +133,7 @@ sub file_added {
     )->hash->{xmit_key};
 
     if (!$voice_detected) {
-        $self->{app}->log->debug(sprintf('detected as data: %s', $file ));
+        $self->{app}->log->debug(sprintf('TODO:  should be skipped.  detected as data: %s', $file ));
 #        return;  TODO: Temp skip of data to see in gui for debugging
     }
 
@@ -166,10 +165,10 @@ sub detect_voice {
 
     #$self->{app}->log->debug(sprintf('checking if voice: %s', $file ));
 
-    # /usr/bin/ffmpeg -i audio.wav -ss 00:00:00 -to 00:00:30 -lavfi showspectrumpic=s=100x50:scale=log:legend=off audio.png
+    # /usr/bin/ffmpeg -loglevel error -y -i audio.wav -ss 00:00:00 -t 00:00:01 -lavfi showspectrumpic=s=100x50:scale=log:legend=off audio.png
     my $image = '/tmp/classify.png';
     my $start = $duration/2-0.5;
-    my @args = ( '/usr/bin/ffmpeg',  '-y', '-ss', $start, '-t', 1.0, '-i', $file,
+    my @args = ( '/usr/bin/ffmpeg',  '-loglevel', 'error', '-y', '-ss', $start, '-t', 1.0, '-i', $file,
                   '-lavfi',  'showspectrumpic=s=100x50:scale=log:legend=off',  $image);
     system( @args )  == 0
 	or $self->{app}->log->error("system @args failed: $?");
