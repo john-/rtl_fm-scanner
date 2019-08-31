@@ -135,7 +135,7 @@ sub file_added {
 
     if (!$voice_detected) {
         $self->{app}->log->debug(sprintf('detected as data: %s', $file ));
-        return;
+#        return;  TODO: Temp skip of data to see in gui for debugging
     }
 
     # This is an audio clip so attempt to remove the key on/off (start/end bit)
@@ -174,14 +174,14 @@ sub detect_voice {
     system( @args )  == 0
 	or $self->{app}->log->error("system @args failed: $?");
 
-    $self->{app}->log->debug(sprintf(Dumper(@args)));
+    #$self->{app}->log->debug(sprintf(Dumper(@args)));
 
     # put png through the CNN
-    my $classes = $self->{classifier}->classify($image);
-
-    $self->{app}->log->debug(sprintf('classes: %s', Dumper($classes)));
-    if ($classes->{voice} > 0.5) {
+    if ($self->{classifier}->is_voice($image)) {
         $self->{app}->log->debug('This is a voice');
+    } else {
+        $self->{app}->log->debug('This is NOT a voice');
+	$detect_voice = 0;
     }
 
     return $detect_voice;
