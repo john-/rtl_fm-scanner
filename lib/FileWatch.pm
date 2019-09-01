@@ -171,7 +171,7 @@ sub detect_voice {
 
     my $detect_voice = 1;  # if problem occurs assume voice
 
-    #$self->{app}->log->debug(sprintf('checking if voice: %s', $file ));
+    return $detect_voice if !$self->{classifier};
 
     # /usr/bin/ffmpeg -loglevel error -y -i audio.wav -ss 00:00:00 -t 00:00:01 -lavfi showspectrumpic=s=100x50:scale=log:legend=off audio.png
     my $image = '/tmp/classify.png';
@@ -183,10 +183,7 @@ sub detect_voice {
 	return $detect_voice;
     }
 
-    #$self->{app}->log->debug(sprintf(Dumper(@args)));
-
     # put png through the CNN
-    return $detect_voice if !$self->{classifier};
     if ($self->{classifier}->is_voice($image)) {
         $self->{app}->log->debug('This is a voice');
     } else {
@@ -415,11 +412,12 @@ sub create_lockout {
     open(my $fh, '>', '/cart/ham2mon/apps/lockout.txt')
 	or die 	$self->{app}->log->error("Can't open > lockout.txt: $!");
 
-    # TODO:  make this configurable
-    #my $results = $self->{pg}->db->query( 'select freq from freqs where pass = 1 and bank = any(?::text[]) order by freq asc', $self->{app}->defaults->{config}->{banks});
-    #while (my $next = $results->array) {
-#	print $fh "$next->[0]E6\n";
- #   }
+    if ($self->{app}->defaults->{config}->{use_lockout}) {
+        my $results = $self->{pg}->db->query( 'select freq from freqs where pass = 1 and bank = any(?::text[]) order by freq asc', $self->{app}->defaults->{config}->{banks});
+        while (my $next = $results->array) {
+    	    print $fh "$next->[0]E6\n";
+        }
+    }
     close($fh);
 
     # poke the screen session with scanner to reload the blocklist
