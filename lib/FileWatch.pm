@@ -16,17 +16,25 @@ use Data::Dumper;
 sub new {
     my ($class, $app) = @_;
 
-    my $pg = Mojo::Pg->new('postgresql://script@/cart')
+    my $conf = $app->defaults->{config};
+
+    my $pg = Mojo::Pg->new($conf->{pg})
 	or $app->log->error('Could not connect to database');
 
     my $self = {
 	app => $app,
 	pg  => $pg,
 	prev_name => 'first time through',
-	classifier => TransmissionIdentifier->new( { load_params => 1 } ),
+	classifier => TransmissionIdentifier->new( { load_params => 1,
+                                                     params_dir => $conf->{params_dir}} ),
     };
 
-    my $conf = $self->{app}->defaults->{config};
+    if (ref($self->{classifier})) {
+        $self->{app}->log->info('Classification is enabled');
+    } else {
+        $self->{app}->log->error(sprintf('Classification is DISABLED: %s', $self->{classifier}));
+        delete($self->{classifier});
+    }
 
     my $notifier = new Linux::Inotify2;
 
@@ -170,12 +178,15 @@ sub detect_voice {
     my $start = $duration/2-0.5;
     my @args = ( '/usr/bin/ffmpeg',  '-loglevel', 'error', '-y', '-ss', $start, '-t', 1.0, '-i', $file,
                   '-lavfi',  'showspectrumpic=s=100x50:scale=log:legend=off',  $image);
-    system( @args )  == 0
-	or $self->{app}->log->error("system @args failed: $?");
+    if (system( @args ) != 0) {
+	$self->{app}->log->error("system @args failed: $?");
+	return $detect_voice;
+    }
 
     #$self->{app}->log->debug(sprintf(Dumper(@args)));
 
     # put png through the CNN
+    return $detect_voice if !$self->{classifier};
     if ($self->{classifier}->is_voice($image)) {
         $self->{app}->log->debug('This is a voice');
     } else {
