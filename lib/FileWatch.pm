@@ -129,8 +129,10 @@ sub file_added {
     my $voice_detected;
     if ($self->detect_voice($event->fullname, $duration)) {
 	$voice_detected = 1;
+        $self->{app}->log->debug('detected voice');
     } else {
 	$voice_detected = 0;
+        $self->{app}->log->debug('detected data');
 	$xmit->{label} .= '   detected DATA';
     }
 
@@ -140,8 +142,8 @@ sub file_added {
     )->hash->{xmit_key};
 
     if (!$voice_detected) {
-        $self->{app}->log->debug(sprintf('TODO:  should be skipped.  detected as data: %s', $file ));
-#        return;  TODO: Temp skip of data to see in gui for debugging
+        $self->{app}->log->debug(sprintf('Detected as data: %s', $file ));
+        return;
     }
 
     # This is an audio clip so attempt to remove the key on/off (start/end bit)
@@ -184,9 +186,9 @@ sub detect_voice {
 
     # put png through the CNN
     if ($self->{classifier}->is_voice($image)) {
-        $self->{app}->log->debug('This is a voice');
+        #$self->{app}->log->debug('This is a voice');
     } else {
-        $self->{app}->log->debug('This is NOT a voice');
+        #$self->{app}->log->debug('This is NOT a voice');
 	$detect_voice = 0;
     }
 
