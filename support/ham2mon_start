@@ -9,7 +9,11 @@
 
 # work with airspy
 
-python2 /cart/ham2mon/apps/ham2mon.py -a "airspy" -f 467.5E6 --lna_gain 11 --mix_gain 8 --if_gain 6 -t 0 -d 0 -s -70 -r 3E6 -v 20 -w -m -b 16 -n 3 -k 10 -l /cart/ham2mon/apps/lockout.txt
+# start of 2019 IMSA
+#python2 /cart/ham2mon/apps/ham2mon.py -a "airspy" -f 467.5E6 --lna_gain 11 --mix_gain 8 --if_gain 6 -t 0 -d 0 -s -70 -r 3E6 -v 20 -w -m -b 16 -n 3 -k 10 -l /cart/ham2mon/apps/lockout.txt
+
+# main straight right across from pits.
+python2 /cart/ham2mon/apps/ham2mon.py -a "airspy" -f 467.5E6 --lna_gain 7 --mix_gain 8 --if_gain 7 -t 0 -d 0 -s -70 -r 3E6 -v 20 -w -m -b 16 -n 3 -k 10 -l /cart/ham2mon/apps/lockout.txt
 
 # roof antenna, both FRS local and police (manually change freq to a/b)
 # play with squelch for long trans?
