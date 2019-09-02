@@ -85,6 +85,16 @@ sub file_added {
     }
     $self->{prev_name} = $file;
 
+    my $wav = Audio::Wav->new;
+    my $read = $wav->read( $event->fullname );
+    my $duration = $read->length_seconds;
+    $read->{handle}->close;    # http://www.perlmonks.org/bare/?node_id=946696
+
+    if ($duration < 1.0) {
+        $self->{app}->log->debug(sprintf('throwing away a short transmission: %.2f', $duration ));
+        return;
+    }
+
     my ($freq) = $file =~ /(.*)_.*\.wav/;
 
     my $entry = $self->{pg}->db->query(
@@ -108,23 +118,12 @@ sub file_added {
     }
 
     my $xmit = {
-        'freq' => $freq,
-        'file' => $file,
-        'type' => 'audio',
+        'freq'     => $freq,
+        'file'     => $file,
+        'type'     => 'audio',
+        'duration' => $duration,
 	%$entry,
     };
-
-    my $wav = Audio::Wav->new;
-    my $read = $wav->read( $event->fullname );
-#    my $read = $wav->read( $dest );
-    my $duration = $read->length_seconds;
-    $xmit->{duration} = $duration;
-    $read->{handle}->close;    # http://www.perlmonks.org/bare/?node_id=946696
-
-    if ($duration < 1.0) {
-        $self->{app}->log->debug(sprintf('throwing away a short transmission: %.2f', $duration ));
-        return;
-    }
 
     # try to detect voice vs. data
     my $voice_detected;
@@ -159,7 +158,7 @@ sub file_added {
 
     # TODO: ugh
     # we had something worth telling client about.  This hack will
-    # increment freq center point 1Mhz.   This is needed because I am not ready to
+    # increment freq center.   This is needed because I am not ready to
     # deal with ham2mon which needs code to filter uninteresting stuff
     # out.   Basically, remove need for return statements above.
     $self->count_down;
@@ -418,6 +417,7 @@ sub create_lockout {
     	    print $fh "$next->[0]E6\n";
         }
     }
+
     close($fh);
 
     # poke the screen session with scanner to reload the blocklist
