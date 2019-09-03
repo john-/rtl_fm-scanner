@@ -6,6 +6,8 @@
 
 [Service]
     User=%i
+    Environment=LD_LIBRARY_PATH=/cart/incubator-mxnet/lib
+    Environment=export PERL5LIB=/cart/perl5/lib/perl5
     ExecStart=/cart/rtl_fm-scanner/bin/rtl_fm-scanner daemon --listen "http://*:3000"
     RestartSec=30sec
     Restart=on-failure
