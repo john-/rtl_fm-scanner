@@ -80,8 +80,9 @@ sub file_added {
 	# this only handles case where same name comes up multiple times in a row.
 	# the general case of other file(s) in between is not covered.
 	# maybe handle it on DB insert (put unique constraint on file name
+	# this is probably due to first file coming in and second occuring in < 1 second
 	$self->{app}->log->debug( sprintf('a file with same name just happened: %s', $file) );
-	return;
+	#return;
     }
     $self->{prev_name} = $file;
 
