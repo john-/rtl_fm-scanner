@@ -26,7 +26,8 @@ sub new {
 	pg  => $pg,
 	prev_name => 'first time through',
 	classifier => TransmissionIdentifier->new( { load_params => 1,
-                                                     params_dir => $conf->{params_dir}} ),
+                                                     params => $conf->{params},
+                                                     labels => $conf->{labels}} ),
     };
 
     if (ref($self->{classifier})) {
@@ -128,7 +129,8 @@ sub file_added {
 
     # try to detect voice vs. data
     my $voice_detected;
-    if ($self->detect_voice($event->fullname, $duration)) {
+    if ($self->{classifier}->is_voice( input => $event->fullname, duration => $duration )) {
+    #if ($self->detect_voice($event->fullname, $duration)) {
 	$voice_detected = 1;
         $self->{app}->log->debug('detected voice');
     } else {
@@ -166,34 +168,6 @@ sub file_added {
     # out.   Basically, remove need for return statements above.
     $self->count_down;
 
-}
-
-sub detect_voice {
-    my ($self, $file, $duration) = @_;
-
-    my $detect_voice = 1;  # if problem occurs assume voice
-
-    return $detect_voice if !$self->{classifier};
-
-    # /usr/bin/ffmpeg -loglevel error -y -i audio.wav -ss 00:00:00 -t 00:00:01 -lavfi showspectrumpic=s=100x50:scale=log:legend=off audio.png
-    my $image = '/tmp/classify.png';
-    my $start = $duration/2-0.5;
-    my @args = ( '/usr/bin/ffmpeg',  '-loglevel', 'error', '-y', '-ss', $start, '-t', 1.0, '-i', $file,
-                  '-lavfi',  'showspectrumpic=s=100x50:scale=log:legend=off',  $image);
-    if (system( @args ) != 0) {
-	$self->{app}->log->error("system @args failed: $?");
-	return $detect_voice;
-    }
-
-    # put png through the CNN
-    if ($self->{classifier}->is_voice($image)) {
-        #$self->{app}->log->debug('This is a voice');
-    } else {
-        #$self->{app}->log->debug('This is NOT a voice');
-	$detect_voice = 0;
-    }
-
-    return $detect_voice;
 }
 
 sub set_mode {
