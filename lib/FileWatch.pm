@@ -135,8 +135,8 @@ sub file_added {
         $self->{app}->log->debug('detected voice');
     } else {
 	$voice_detected = 0;
-        $self->{app}->log->debug('detected data');
-	$xmit->{label} .= '   detected DATA';
+        $self->{app}->log->debug('detected data/skip');
+	$xmit->{label} .= '   detected data/skip';
     }
 
     $xmit->{xmit_key} = $self->{pg}->db->query(
