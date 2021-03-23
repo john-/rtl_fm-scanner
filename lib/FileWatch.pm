@@ -63,6 +63,7 @@ sub new {
     return $self;
 }
 
+# TODO:   REMOVE ALL THIS AS NO LONGER NEEDED
 sub process {
     my ( $self, $xmit ) = @_;
 
@@ -75,7 +76,7 @@ sub process {
 
     $self->{app}->log->debug(sprintf('FilwWatch proccess file: %s', $file));
 
-     my ($freq) = $file =~ /(.*)_.*\.wav/;
+    my ($freq) = $file =~ /(.*)_.*\.wav/;
 
     my $entry = $self->{pg}->db->query(
        'select freq_key, freq, label, bank, pass from freqs where freq = ? and bank = any(?::text[]) limit 1',
@@ -140,6 +141,7 @@ sub process {
     return $xmit;
 }
 
+# TODO:   REMOVE ALL THIS AS NO LONGER NEEDED
 sub file_added {
     my ( $self, $event ) = @_;
 

@@ -2,10 +2,11 @@
 
 use Mojolicious::Lite;
 use Mojo::IOLoop;
+#use Mojo::IOLoop::Subprocess;
 use Mojo::Util qw(dumper);
 use Mojo::Log;
 use Mojo::Pg;
-#use Mojo::Pg::PubSub;
+use Mojo::Pg::PubSub;
 use Mojo::JSON qw(decode_json encode_json);
 
 use FindBin qw($Bin);
@@ -75,21 +76,49 @@ websocket '/output' => sub {
 
 #    my $watcher = Inotifier::Model::FileWatch->new($c->app);
 
-    $c->{cb}{$client} = $watcher->watch( $client, 
-        sub {
-            my $msg = shift;
-            #$msg->{url} = $c->app->defaults->{audio_url};
-            $c = $c->send( { json => $msg } );
-            $c->app->log->debug("item to let client know about (watcher): $msg->{type}");
-        }
-    );
+#    $c->{cb}{$client} = $watcher->watch( $client, 
+#        sub {
+#            my $xmit = shift;
+#            $c->app->log->debug("xmit in callback: " . Dumper($xmit));
+#            $c = $c->send( { json => $xmit } );
+#            $c->app->log->debug("item to let client know about (watcher): $xmit->{type}");
+#        }
+#    );
 
-    #my $cb = $c->pubsub->listen(msg => sub {
-#	my ($pubsub, $payload) = @_;
-#	my $msg = decode_json($payload);
- #       $c = $c->send( { json => $msg } );
-  #      app->log->debug("item to let client know about (pubsub): $msg->{type}");
-   # });
+    my $cb = $c->pg->pubsub->listen(audio => sub {
+	my ($pubsub, $payload) = @_;
+	my $msg = decode_json($payload);
+        $c = $c->send( { json => $msg } );
+        $c->app->log->debug("item to let client know about (watcher): $msg->{type}");
+#        my $xmit = $watcher->process($msg);  # store in DB, add additional fields, etc
+#        Mojo::IOLoop->subprocess->run_p(sub {
+#            app->log->debug("about to process " . Dumper($msg));
+#	    my $xmit = $watcher->process($msg);  # store in DB, add additional fields, etc
+#	    return $xmit;
+#	})->then(sub (@results) {
+#	    my $xmit = $results[0];
+#            app->log->debug("processed: " . Dumper($xmit));
+#	    # can't send the message from here.  need to do it as file is added
+#            #$c = $c->send( { json => $xmit } );
+#            $c->app->log->debug("item to let client know about (watcher): $xmit->{type}");
+#        })->catch(sub ($err) {
+#            app->log->error("rtl_fm-scanner subprocess error: $err");
+#        });
+
+	#my $subprocess = Mojo::IOLoop::Subprocess->new;
+	#$subprocess->run(
+	#    sub ($subprocess) {
+        #        app->log->debug('DOES NOT GET HERE');
+	#
+	#        return $msg;
+        #    },
+        #    sub ($subprocess, $err, @results) {
+        #        app->log->debug("got results: $results[0]");
+        #        #app->log->debug("item to let client know about (pubsub): $msg->{type}");
+        #        #$c = $c->send( { json => $msg } );
+	#    }
+        #);
+    });
 
     $c->on(
         json => sub {
@@ -116,7 +145,7 @@ websocket '/output' => sub {
                 $c->start_rtlfm
                   ;    # need to start rtl_fm for changes to take effect
 
-                $c->pubsub->notify(msg => encode_json( app->config_msg ));
+                $c->pg->pubsub->notify(msg => encode_json( app->config_msg ));
             }
         }
     );
@@ -124,7 +153,7 @@ websocket '/output' => sub {
     $c->on(
         finish => sub {
             my ( $c, $code, $reason ) = @_;
-	    #$c->pubsub->unlisten( msg => $cb );
+	    $c->pg->pubsub->unlisten( msg => $cb );
 	    $watcher->unwatch($client);
             delete $c->{cb}{$client};
             $c->app->log->debug("WebSocket closed with status $code.");
