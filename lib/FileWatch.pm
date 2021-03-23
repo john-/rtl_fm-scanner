@@ -63,6 +63,83 @@ sub new {
     return $self;
 }
 
+sub process {
+    my ( $self, $xmit ) = @_;
+
+    if ($xmit->{duration} < 1.0) {
+        $self->{app}->log->debug(sprintf('got a short transmission...stop these in xmit_procesor: %.2f', $xmit->{duration} ));
+        #return;
+    }
+
+    my $file = $xmit->{file};
+
+    $self->{app}->log->debug(sprintf('FilwWatch proccess file: %s', $file));
+
+     my ($freq) = $file =~ /(.*)_.*\.wav/;
+
+    my $entry = $self->{pg}->db->query(
+       'select freq_key, freq, label, bank, pass from freqs where freq = ? and bank = any(?::text[]) limit 1',
+       $freq, $self->{app}->defaults->{config}->{banks}
+	)->hash;    #  TODO: under what situations can there be more than one across scanned banks?
+
+    #$self->{app}->log->debug(Dumper($entry));
+
+    if (! $entry ) {   # if no entry then create one
+	my $default = $self->{app}->defaults->{config}->{banks}->[0];
+
+	$entry->{freq_key} = $self->{pg}->db->query('insert into freqs (freq, label, bank, source) values (?, ?, ?, ?) returning freq_key', $freq, 'Unknown', $default, 'search')
+	    ->hash->{freq_key};
+
+        $entry = { label => 'Unknown',
+                   bank  => $default,
+	           freq_key => $entry->{freq_key},
+                   pass => 0,
+                 }
+    }
+
+    $xmit->{freq} = $freq;
+
+    $xmit = { %$xmit, %$entry };
+
+    my $voice_detected;
+    if ($xmit->{detected_as} eq 'V') {
+	$voice_detected = 1;
+        $self->{app}->log->debug('detected voice');
+    } else {
+	$voice_detected = 0;
+        $self->{app}->log->debug('detected data/skip');
+	$xmit->{label} .= '   detected data/skip';
+    }
+
+    $xmit->{xmit_key} = $self->{pg}->db->query(
+        'insert into xmit_history (freq_key, source, file, duration, detect_voice) values (?, ?, ?, ?, ?) returning xmit_key',
+	    $xmit->{freq_key}, 'dongle1', $file, $xmit->{duration}, $voice_detected
+    )->hash->{xmit_key};
+
+    # This is an audio clip so attempt to remove the key on/off (start/end bit)
+    my $src = $self->{app}->defaults->{config}->{audio_src} . "/$file";
+    my $dest = $self->{app}->defaults->{config}->{audio_dst} . "/$file";
+    #my @args = ( '/usr/sbin/sox', $event->fullname, $dest, 'reverse', 'trim', '0.23', 'reverse' );
+    my @args = ( '/usr/bin/sox', $src, $dest, 'trim', '0.02', '-0.23' );
+    system( @args )  == 0
+	or $self->{app}->log->error("system @args failed: $?");
+    $xmit->{duration} -= 0.25;
+
+    foreach my $client (keys %{$self->{cb}}) {
+	$self->{app}->log->debug("client to send message to: $client");
+        $self->{cb}{$client}->($xmit);
+    }
+
+    # TODO: ugh
+    # we had something worth telling client about.  This hack will
+    # increment freq center.   This is needed because I am not ready to
+    # deal with ham2mon which needs code to filter uninteresting stuff
+    # out.   Basically, remove need for return statements above.
+    $self->count_down;
+
+    return $xmit;
+}
+
 sub file_added {
     my ( $self, $event ) = @_;
 
@@ -273,9 +350,9 @@ sub watch {
     my ( $self, $client, $cb ) = @_;
 
     $self->{cb}{$client} = $cb;
-    $self->{app}->log->debug(sprintf('watchning for %s', $client ));
+    $self->{app}->log->debug(sprintf('watching for %s', $client ));
 
-    return $client;   # probably not oding right thing here
+    return $client;   # probably not doing right thing here
 }
 
 sub unwatch {
