@@ -1,15 +1,9 @@
-package Inotifier::Model::FileWatch;
+package FileWatch;
 
 use strict;
 use warnings;
 
-use Linux::Inotify2;
-use EV;
-use AnyEvent;
 use Mojo::Pg;
-use Audio::Wav;
-
-use TransmissionIdentifier;
 
 use Data::Dumper;
 
@@ -24,31 +18,7 @@ sub new {
     my $self = {
 	app => $app,
 	pg  => $pg,
-	prev_name => 'first time through',
-	classifier => TransmissionIdentifier->new( { load_params => 1,
-                                                     params => $conf->{params},
-                                                     labels => $conf->{labels}} ),
     };
-
-    if (ref($self->{classifier})) {
-        $self->{app}->log->info('Classification is enabled');
-    } else {
-        $self->{app}->log->error(sprintf('Classification is DISABLED: %s', $self->{classifier}));
-        delete($self->{classifier});
-    }
-
-    my $notifier = new Linux::Inotify2;
-
-    $self->{watcher} = $notifier->watch( $conf->{audio_src}, IN_CLOSE_WRITE,
-        sub { $self->file_added(@_) } );
-
-    $self->{io} = AnyEvent->io(
-        fh   => $notifier->{fd},
-        poll => 'r',
-        cb   => sub { $notifier->poll }
-    );
-
-    $self->{app}->log->debug('Watching new files for all clients');
 
     bless $self, $class;
 
@@ -59,194 +29,7 @@ sub new {
     $self->set_mode($setups{$default_setup});
 
     #$self->count_down;
-
     return $self;
-}
-
-# TODO:   REMOVE ALL THIS AS NO LONGER NEEDED
-sub process {
-    my ( $self, $xmit ) = @_;
-
-    if ($xmit->{duration} < 1.0) {
-        $self->{app}->log->debug(sprintf('got a short transmission...stop these in xmit_procesor: %.2f', $xmit->{duration} ));
-        #return;
-    }
-
-    my $file = $xmit->{file};
-
-    $self->{app}->log->debug(sprintf('FilwWatch proccess file: %s', $file));
-
-    my ($freq) = $file =~ /(.*)_.*\.wav/;
-
-    my $entry = $self->{pg}->db->query(
-       'select freq_key, freq, label, bank, pass from freqs where freq = ? and bank = any(?::text[]) limit 1',
-       $freq, $self->{app}->defaults->{config}->{banks}
-	)->hash;    #  TODO: under what situations can there be more than one across scanned banks?
-
-    #$self->{app}->log->debug(Dumper($entry));
-
-    if (! $entry ) {   # if no entry then create one
-	my $default = $self->{app}->defaults->{config}->{banks}->[0];
-
-	$entry->{freq_key} = $self->{pg}->db->query('insert into freqs (freq, label, bank, source) values (?, ?, ?, ?) returning freq_key', $freq, 'Unknown', $default, 'search')
-	    ->hash->{freq_key};
-
-        $entry = { label => 'Unknown',
-                   bank  => $default,
-	           freq_key => $entry->{freq_key},
-                   pass => 0,
-                 }
-    }
-
-    $xmit->{freq} = $freq;
-
-    $xmit = { %$xmit, %$entry };
-
-    my $voice_detected;
-    if ($xmit->{detected_as} eq 'V') {
-	$voice_detected = 1;
-        $self->{app}->log->debug('detected voice');
-    } else {
-	$voice_detected = 0;
-        $self->{app}->log->debug('detected data/skip');
-	$xmit->{label} .= '   detected data/skip';
-    }
-
-    $xmit->{xmit_key} = $self->{pg}->db->query(
-        'insert into xmit_history (freq_key, source, file, duration, detect_voice) values (?, ?, ?, ?, ?) returning xmit_key',
-	    $xmit->{freq_key}, 'dongle1', $file, $xmit->{duration}, $voice_detected
-    )->hash->{xmit_key};
-
-    # This is an audio clip so attempt to remove the key on/off (start/end bit)
-    my $src = $self->{app}->defaults->{config}->{audio_src} . "/$file";
-    my $dest = $self->{app}->defaults->{config}->{audio_dst} . "/$file";
-    #my @args = ( '/usr/sbin/sox', $event->fullname, $dest, 'reverse', 'trim', '0.23', 'reverse' );
-    my @args = ( '/usr/bin/sox', $src, $dest, 'trim', '0.02', '-0.23' );
-    system( @args )  == 0
-	or $self->{app}->log->error("system @args failed: $?");
-    $xmit->{duration} -= 0.25;
-
-    foreach my $client (keys %{$self->{cb}}) {
-	$self->{app}->log->debug("client to send message to: $client");
-        $self->{cb}{$client}->($xmit);
-    }
-
-    # TODO: ugh
-    # we had something worth telling client about.  This hack will
-    # increment freq center.   This is needed because I am not ready to
-    # deal with ham2mon which needs code to filter uninteresting stuff
-    # out.   Basically, remove need for return statements above.
-    $self->count_down;
-
-    return $xmit;
-}
-
-# TODO:   REMOVE ALL THIS AS NO LONGER NEEDED
-sub file_added {
-    my ( $self, $event ) = @_;
-
-    my $file = $event->name;
-
-    $self->{app}->log->debug(sprintf('file: %s', $file));
-
-    unless (-e $event->fullname) {
-	# there is code in ham2mon to delete wav files with header
-	# only (44 bytes).
-	$self->{app}->log->debug( sprintf('a header only file was removed by ham2mon: %s', $file) );
-	return;
-    }
-
-    if ($file eq $self->{prev_name}) {
-	# this only handles case where same name comes up multiple times in a row.
-	# the general case of other file(s) in between is not covered.
-	# maybe handle it on DB insert (put unique constraint on file name
-	# this is probably due to first file coming in and second occuring in < 1 second
-	$self->{app}->log->debug( sprintf('a file with same name just happened: %s', $file) );
-	#return;
-    }
-    $self->{prev_name} = $file;
-
-    my $wav = Audio::Wav->new;
-    my $read = $wav->read( $event->fullname );
-    my $duration = $read->length_seconds;
-    $read->{handle}->close;    # http://www.perlmonks.org/bare/?node_id=946696
-
-    if ($duration < 1.0) {
-        $self->{app}->log->debug(sprintf('throwing away a short transmission: %.2f', $duration ));
-        return;
-    }
-
-    my ($freq) = $file =~ /(.*)_.*\.wav/;
-
-    my $entry = $self->{pg}->db->query(
-       'select freq_key, freq, label, bank, pass from freqs where freq = ? and bank = any(?::text[]) limit 1',
-       $freq, $self->{app}->defaults->{config}->{banks}
-	)->hash;    #  TODO: under what situations can there be more than one across scanned banks?
-
-    #$self->{app}->log->debug(Dumper($entry));
-
-    if (! $entry ) {   # if no entry then create one
-	my $default = $self->{app}->defaults->{config}->{banks}->[0];
-
-	$entry->{freq_key} = $self->{pg}->db->query('insert into freqs (freq, label, bank, source) values (?, ?, ?, ?) returning freq_key', $freq, 'Unknown', $default, 'search')
-	    ->hash->{freq_key};
-
-        $entry = { label => 'Unknown',
-                   bank  => $default,
-	           freq_key => $entry->{freq_key},
-                   pass => 0,
-                 }
-    }
-
-    my $xmit = {
-        'freq'     => $freq,
-        'file'     => $file,
-        'type'     => 'audio',
-        'duration' => $duration,
-	%$entry,
-    };
-
-    # try to detect voice vs. data
-    my $voice_detected;
-    if ($self->{classifier}->is_voice( input => $event->fullname, duration => $duration )) {
-    #if ($self->detect_voice($event->fullname, $duration)) {
-	$voice_detected = 1;
-        $self->{app}->log->debug('detected voice');
-    } else {
-	$voice_detected = 0;
-        $self->{app}->log->debug('detected data/skip');
-	$xmit->{label} .= '   detected data/skip';
-    }
-
-    $xmit->{xmit_key} = $self->{pg}->db->query(
-        'insert into xmit_history (freq_key, source, file, duration, detect_voice) values (?, ?, ?, ?, ?) returning xmit_key',
-	    $xmit->{freq_key}, 'dongle1', $file, $duration, $voice_detected
-    )->hash->{xmit_key};
-
-    if (!$voice_detected) {
-        $self->{app}->log->debug(sprintf('Detected as data: %s', $file ));
-        return;
-    }
-
-    # This is an audio clip so attempt to remove the key on/off (start/end bit)
-    my $dest = $self->{app}->defaults->{config}->{audio_dst} . "/$file";
-    #my @args = ( '/usr/sbin/sox', $event->fullname, $dest, 'reverse', 'trim', '0.23', 'reverse' );
-    my @args = ( '/usr/bin/sox', $event->fullname, $dest, 'trim', '0.02', '-0.23' );
-    system( @args )  == 0
-	or $self->{app}->log->error("system @args failed: $?");
-    $xmit->{duration} -= 0.25;
-
-    foreach my $client (keys %{$self->{cb}}) {
-        $self->{cb}{$client}->($xmit);
-    }
-
-    # TODO: ugh
-    # we had something worth telling client about.  This hack will
-    # increment freq center.   This is needed because I am not ready to
-    # deal with ham2mon which needs code to filter uninteresting stuff
-    # out.   Basically, remove need for return statements above.
-    $self->count_down;
-
 }
 
 sub set_mode {
@@ -332,37 +115,19 @@ sub count_down {
 
     # maybe add modes.   For example stay on certain center point.
 
-    undef $self->{idle_timer};
+    if ($self->{idle_timer}) { Mojo::IOLoop->remove($self->{idle_timer}) }
 
     if ($self->{num_moves} == 0) { return }    # not iterating through a range
 
     my $rate = $self->{app}->defaults->{config}->{rate};
-    $self->{idle_timer} = AnyEvent->timer (after => $rate, cb => sub {
-	$self->set_center;
 
+    $self->{idle_timer} = Mojo::IOLoop->recurring($rate => sub {
+	$self->set_center;
 	#        system( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff', '"m"' );
         $self->{app}->log->debug(sprintf('hack timer fired after %d seconds', $rate ));
         $self->count_down;
     });
 
-}
-
-
-sub watch {
-    my ( $self, $client, $cb ) = @_;
-
-    $self->{cb}{$client} = $cb;
-    $self->{app}->log->debug(sprintf('watching for %s', $client ));
-
-    return $client;   # probably not doing right thing here
-}
-
-sub unwatch {
-    my ($self, $client) = @_;
-
-    delete $self->{cb}{$client};
-
-    #$self->{watcher}->cancel;
 }
 
 sub get_freqs {

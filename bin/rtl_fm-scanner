@@ -25,9 +25,6 @@ app->defaults->{config} = $config;
 
 app->log( Mojo::Log->new( path => "$Bin/../log/rtl_fm-scanner.log" ) );
 
-# Yes, this is really bad and one of the reasons this thing will not work with forking server
-my $watcher = Inotifier::Model::FileWatch->new(app);
-
 app->plugin('RenderFile');
 app->plugin('CORS'); # lets the client get around same origin policy restriction
 
@@ -58,7 +55,7 @@ get '/audio' => sub {
 get '/freqs' => sub {
     my $c = shift;
 
-    my $freqs = $watcher->get_freqs( $c->param('mode') );
+    my $freqs = $c->watcher->get_freqs( $c->param('mode') );
     #foreach (@$freqs) { $_->{url} = app->defaults->{audio_url} };  # more hack
 
     $c->render( json => $freqs );
@@ -74,50 +71,16 @@ websocket '/output' => sub {
 
     $c->send( { json => app->config_msg } );
 
-#    my $watcher = Inotifier::Model::FileWatch->new($c->app);
-
-#    $c->{cb}{$client} = $watcher->watch( $client, 
-#        sub {
-#            my $xmit = shift;
-#            $c->app->log->debug("xmit in callback: " . Dumper($xmit));
-#            $c = $c->send( { json => $xmit } );
-#            $c->app->log->debug("item to let client know about (watcher): $xmit->{type}");
-#        }
-#    );
-
     my $cb = $c->pg->pubsub->listen(audio => sub {
 	my ($pubsub, $payload) = @_;
-	my $msg = decode_json($payload);
-        $c = $c->send( { json => $msg } );
-        $c->app->log->debug("item to let client know about (watcher): $msg->{type}");
-#        my $xmit = $watcher->process($msg);  # store in DB, add additional fields, etc
-#        Mojo::IOLoop->subprocess->run_p(sub {
-#            app->log->debug("about to process " . Dumper($msg));
-#	    my $xmit = $watcher->process($msg);  # store in DB, add additional fields, etc
-#	    return $xmit;
-#	})->then(sub (@results) {
-#	    my $xmit = $results[0];
-#            app->log->debug("processed: " . Dumper($xmit));
-#	    # can't send the message from here.  need to do it as file is added
-#            #$c = $c->send( { json => $xmit } );
-#            $c->app->log->debug("item to let client know about (watcher): $xmit->{type}");
-#        })->catch(sub ($err) {
-#            app->log->error("rtl_fm-scanner subprocess error: $err");
-#        });
 
-	#my $subprocess = Mojo::IOLoop::Subprocess->new;
-	#$subprocess->run(
-	#    sub ($subprocess) {
-        #        app->log->debug('DOES NOT GET HERE');
-	#
-	#        return $msg;
-        #    },
-        #    sub ($subprocess, $err, @results) {
-        #        app->log->debug("got results: $results[0]");
-        #        #app->log->debug("item to let client know about (pubsub): $msg->{type}");
-        #        #$c = $c->send( { json => $msg } );
-	#    }
-        #);
+	my $msg = decode_json($payload);
+
+        if ($c->for_client($msg)) {
+            $c = $c->send( { json => $msg } );
+            $c->app->log->debug("item to let client know about (watcher): $msg->{type}");
+            $c->watcher->count_down();  # there is activity so reset the timer
+	}
     });
 
     $c->on(
@@ -128,11 +91,11 @@ websocket '/output' => sub {
                 app->log->debug('client pinged me');
             }
             elsif ( $hash->{type} eq 'set_freq' ) {
-                $watcher->set_freq( $hash );
+                $c->watcher->set_freq( $hash );
                 $c = $c->send( { json => {type => 'update'} } );
             }
             elsif ( $hash->{type} eq 'set_mode' ) {
-                $watcher->set_mode( $hash );
+                $c->watcher->set_mode( $hash );
                 $c->send( { json => app->config_msg } );
             }
             elsif ( $hash->{type} eq 'clear_auto_pass' ) {
@@ -153,18 +116,26 @@ websocket '/output' => sub {
     $c->on(
         finish => sub {
             my ( $c, $code, $reason ) = @_;
-	    $c->pg->pubsub->unlisten( msg => $cb );
-	    $watcher->unwatch($client);
-            delete $c->{cb}{$client};
+	    $c->pg->pubsub->unlisten( audio => $cb );
             $c->app->log->debug("WebSocket closed with status $code.");
         }
     );
 };
 
+helper for_client => sub {
+    my ($self, $msg) = @_;
+
+    if ($msg->{detected_as} eq 'V') {
+        return 1;
+    } else {
+        return 0;
+    }
+};
+
 helper config_msg => sub {
     my $self = shift;
 
-    my $banks = $watcher->get_banks;
+    my $banks = $self->watcher->get_banks;
     $config->{existing_banks} = $banks;
 
     #push @{$config->{banks}}, 'TBD';   # overlay things "recently" found in search
@@ -177,9 +148,9 @@ helper pg => sub {
       or app->log->error('Could not connect to database');
 };
 
-#helper watcher => sub {
-#    state $watcher = Inotifier::Model::FileWatch->new(app);
-#};
+helper watcher => sub {
+    state $watcher = FileWatch->new(app);
+};
 
 helper clear_auto_pass => sub {
     my $self = shift;
