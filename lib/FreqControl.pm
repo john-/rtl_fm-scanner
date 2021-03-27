@@ -4,6 +4,8 @@ use strict;
 use warnings;
 
 use Mojo::Pg;
+use Mojo::Pg::PubSub;
+use Mojo::JSON qw(decode_json);
 
 use Data::Dumper;
 
@@ -28,7 +30,13 @@ sub new {
     my %setups = %{$conf->{setups}};
     $self->set_mode($setups{$default_setup});
 
-    #$self->count_down;
+    my $listener = $pg->pubsub->listen(audio => sub {
+	my ($pubsub, $payload) = @_;
+
+	my $msg = decode_json($payload);
+	$self->count_down();  # there is activity so reset the timer
+    });
+
     return $self;
 }
 

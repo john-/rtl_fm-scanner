@@ -79,7 +79,7 @@ websocket '/output' => sub {
         if ($c->for_client($msg)) {
             $c = $c->send( { json => $msg } );
             $c->app->log->debug("item to let client know about: $msg->{type}");
-            $c->freq->count_down();  # there is activity so reset the timer
+            #$c->freq->count_down();  # there is activity so reset the timer
 	}
     });
 
@@ -144,7 +144,7 @@ helper config_msg => sub {
 };
 
 helper pg => sub {
-    state $pg = Mojo::Pg->new('postgresql://script@/cart')
+    state $pg = Mojo::Pg->new($config->{pg})
       or app->log->error('Could not connect to database');
 };
 
@@ -167,6 +167,8 @@ helper clear_auto_pass => sub {
 
     $self->pubsub->notify(msg => encode_json( {type => 'update'} ));
 };
+
+app->freq->count_down();  # kick things off
 
 app->start;
 
