@@ -12,7 +12,7 @@ use Mojo::JSON qw(decode_json encode_json);
 use FindBin qw($Bin);
 use lib "$Bin/../lib";
 
-use FileWatch;
+use FreqControl;
 
 use Data::Dumper;
 
@@ -55,7 +55,7 @@ get '/audio' => sub {
 get '/freqs' => sub {
     my $c = shift;
 
-    my $freqs = $c->watcher->get_freqs( $c->param('mode') );
+    my $freqs = $c->freq->get_freqs( $c->param('mode') );
     #foreach (@$freqs) { $_->{url} = app->defaults->{audio_url} };  # more hack
 
     $c->render( json => $freqs );
@@ -78,8 +78,8 @@ websocket '/output' => sub {
 
         if ($c->for_client($msg)) {
             $c = $c->send( { json => $msg } );
-            $c->app->log->debug("item to let client know about (watcher): $msg->{type}");
-            $c->watcher->count_down();  # there is activity so reset the timer
+            $c->app->log->debug("item to let client know about: $msg->{type}");
+            $c->freq->count_down();  # there is activity so reset the timer
 	}
     });
 
@@ -91,11 +91,11 @@ websocket '/output' => sub {
                 app->log->debug('client pinged me');
             }
             elsif ( $hash->{type} eq 'set_freq' ) {
-                $c->watcher->set_freq( $hash );
+                $c->freq->set_freq( $hash );
                 $c = $c->send( { json => {type => 'update'} } );
             }
             elsif ( $hash->{type} eq 'set_mode' ) {
-                $c->watcher->set_mode( $hash );
+                $c->freq->set_mode( $hash );
                 $c->send( { json => app->config_msg } );
             }
             elsif ( $hash->{type} eq 'clear_auto_pass' ) {
@@ -135,7 +135,7 @@ helper for_client => sub {
 helper config_msg => sub {
     my $self = shift;
 
-    my $banks = $self->watcher->get_banks;
+    my $banks = $self->freq->get_banks;
     $config->{existing_banks} = $banks;
 
     #push @{$config->{banks}}, 'TBD';   # overlay things "recently" found in search
@@ -148,8 +148,8 @@ helper pg => sub {
       or app->log->error('Could not connect to database');
 };
 
-helper watcher => sub {
-    state $watcher = FileWatch->new(app);
+helper freq => sub {
+    state $freq = FreqControl->new(app);
 };
 
 helper clear_auto_pass => sub {

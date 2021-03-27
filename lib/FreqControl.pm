@@ -1,4 +1,4 @@
-package FileWatch;
+package FreqControl;
 
 use strict;
 use warnings;
