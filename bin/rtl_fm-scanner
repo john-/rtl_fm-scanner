@@ -47,7 +47,7 @@ get '/audio' => sub {
 
     # Open file in browser(do not show save dialog)
     $c->render_file(
-        'filepath'            => "$config->{audio_dst}/$file",
+        'filepath'            => "$config->{audio_src}/$file",
         'content_disposition' => 'inline'
     );
 };

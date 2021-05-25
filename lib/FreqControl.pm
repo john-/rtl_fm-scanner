@@ -240,7 +240,7 @@ sub create_lockout {
     open(my $fh, '>', '/cart/ham2mon/apps/lockout.txt')
 	or die 	$self->{app}->log->error("Can't open > lockout.txt: $!");
 
-    if ($self->{app}->defaults->{config}->{use_lockout}) {
+    if ($self->{app}->defaults->{config}->{use_lockout}) {  # lockout if not using ML to filter
         my $results = $self->{pg}->db->query( 'select freq from freqs where pass = 1 and bank = any(?::text[]) order by freq asc', $self->{app}->defaults->{config}->{banks});
         while (my $next = $results->array) {
     	    print $fh "$next->[0]E6\n";
