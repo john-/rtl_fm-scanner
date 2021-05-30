@@ -34,7 +34,9 @@ sub new {
 	my ($pubsub, $payload) = @_;
 
 	my $msg = decode_json($payload);
-	$self->count_down();  # there is activity so reset the timer
+        if ($msg->{detected_as} ne 'D') {   # This considers skip items as activity
+	    $self->count_down();  # there is activity so reset the timer
+        }
     });
 
     return $self;
