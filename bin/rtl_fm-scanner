@@ -245,10 +245,18 @@ render_page = function(data) {
                         info += ' / Auto Pass';
                         break;
                 }
-                var contents = '<h2>' + detail.label + '</h2><p>' + 
-                               info + '</p>';
 
-//		$('<li id=' + detail.xmit_key + '>')
+                const types = [ 'V', 'S', 'D' ];
+                var predictions = '';
+
+                types.forEach((type) => {
+                    predictions += `${type}: ${detail.prediction[type]} `;
+                });
+
+                var contents = '<h2>' + detail.label + '</h2><p style="text-align:left;">' +
+                               info + '<span style="float:right;">' +  predictions +
+                               '</span></p>';
+
 		$('<li>')
 		    .append(
 		  	$('<a/>', {
