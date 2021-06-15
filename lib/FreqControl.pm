@@ -112,9 +112,9 @@ sub set_center {
 
     $self->{app}->log->debug(sprintf('setting freq to: %s', $self->{freq}/1000000 ));
 
-    #  screen -S scanner -p 0 -X stuff "/200.666\n"
-    my @args = ( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff',
-	       sprintf('"/%s\\n"', $self->{freq}/1000000 )
+    # tmux send-keys -t cart:ham2mon "/200.666" Enter
+    my @args = ( 'tmux', 'send-keys', '-t', 'cart:ham2mon',
+	       sprintf('"/%s"', $self->{freq}/1000000 ), 'Enter'
 	  );
     system(@args) == 0
 	or $self->{app}->log->error("system @args failed: $?");
@@ -133,7 +133,6 @@ sub count_down {
 
     $self->{idle_timer} = Mojo::IOLoop->recurring($rate => sub {
 	$self->set_center;
-	#        system( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff', '"m"' );
         $self->{app}->log->debug(sprintf('hack timer fired after %d seconds', $rate ));
         $self->count_down;
     });
@@ -252,7 +251,7 @@ sub create_lockout {
     close($fh);
 
     # poke the screen session with scanner to reload the blocklist
-    system( 'screen', '-S', 'scanner', '-p', '0', '-X', 'stuff', '"l"' );
+    system( 'tmux', 'send-keys', '-t', 'cart:ham2mon', '"l"' );
 }
 
 sub set_label {

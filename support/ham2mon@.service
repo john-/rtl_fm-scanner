@@ -1,19 +1,21 @@
 [Unit]
-Description=ham2mon in screen session
-After=screen@.service
-Requires=screen@.service
+Description=ham2mon in tmux session
 
 [Service]
 Type=forking
 User=%i
 
-#WorkingDirectory=/cart/data
+WorkingDirectory=/cart
 
-ExecStartPre=/usr/bin/screen -S scanner -p 0 -X stuff "/bin/stty columns 99 rows 26\n"
-ExecStartPre=/usr/bin/screen -S scanner -p 0 -X stuff "cd /cart/data\n"
-ExecStart=/usr/bin/screen -S scanner -p 0 -X stuff "sudo /usr/local/bin/ham2mon_start\n"
+# tmux attach -t cart
+# tmux list-sessions
 
-#ExecStop=/usr/bin/killall -w -s 2 scanner
+# 126 x 27 minimum with tmux
+ExecStartPre=/usr/bin/tmux new-session -s cart -n "ham2mon" -d -x 126 -y 27
+ExecStartPre=/usr/bin/tmux send-keys -t cart:ham2mon "cd /cart/data" Enter
+ExecStart=/usr/bin/tmux send-keys -t cart:ham2mon "sudo /usr/local/bin/ham2mon_start" Enter
+
+ExecStop=/usr/bin/killall -w -s 2 cart
 
 [Install]
 WantedBy=multi-user.target
