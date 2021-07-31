@@ -290,9 +290,7 @@ render_page = function(data) {
 
 frequency_config = function(entry) {
 
-    var choices = [ 'none', 'manual', 'auto' ];
-
-    var config = $("<div/>").popup({
+    var config = $("<form/>").popup({
         theme : "a",
         overlayTheme : "a",
         transition : "pop"
@@ -330,31 +328,59 @@ frequency_config = function(entry) {
                     .appendTo("#banks");
     });
 
-    //create a form for the pop up
-    var form = $('<form/>');
-
-    var radio_btns = $('<fieldset/>', {
+    var pass_btns = $('<fieldset/>', {
             'data-role': 'controlgroup',
             'data-type': 'horizontal'
         });
 
-    $('<legend/>', { text: 'Pass' }).appendTo(radio_btns);
+    $('<legend/>', { text: 'Pass' }).appendTo(pass_btns);
 
-    $.each( choices, function( index, choice ) {
+    var pass_choices = [ 'none', 'manual', 'auto' ];
+    $.each( pass_choices, function( index, choice ) {
         $('<input/>', {
             type : 'radio',
             name : 'pass-choice',
             id : 'pass-choice-' + choice,
             value : index,
-        }).appendTo(radio_btns);
+        }).appendTo(pass_btns);
 
         $('<label>', {
             for: 'pass-choice-' + choice,
             text: choice
-        }).appendTo(radio_btns);
+        }).appendTo(pass_btns);
     });
 
-   radio_btns.appendTo(form).appendTo(config);
+   pass_btns.appendTo(config);
+
+    var type_btns = $('<fieldset/>', {
+            'data-role': 'controlgroup',
+            'data-type': 'horizontal'
+        });
+
+    $('<legend/>', { text: 'Class' }).appendTo(type_btns);
+
+    var type_choices = {
+        U: 'unknown',
+        V: 'voice',
+        D: 'data',
+        S: 'skip'
+    };
+    // $.each( class_choices, function( index,  ) {
+    for (const [key, choice] of Object.entries(type_choices)) {
+        $('<input/>', {
+            type : 'radio',
+            name : 'type-choice',
+            id : 'type-choice-' + choice,
+            value : key,
+        }).appendTo(type_btns);
+
+        $('<label>', {
+            for: 'type-choice-' + choice,
+            text: choice
+        }).appendTo(type_btns);
+   }
+
+   type_btns.appendTo(config);
 
    //Create a submit button(fake)
     $("<a>", {
@@ -367,6 +393,10 @@ frequency_config = function(entry) {
 
         var changes = {};
 
+        var new_type = $('input[name=type-choice]:checked').val();
+        if ( entry.dectected_as != new_type ) {
+            changes.type = new_type;
+        }
         var new_pass = $('input[name=pass-choice]:checked').val();
         if ( entry.pass != new_pass ) {
             changes.pass = new_pass;
@@ -382,13 +412,15 @@ frequency_config = function(entry) {
 
         if (!jQuery.isEmptyObject(changes) ) {
             changes.freq_key = entry.freq_key;
+            changes.xmit_key = entry.xmit_key;  // the "type" change is to an xmit
             changes.type = 'set_freq';
 
             scan_ws.send(JSON.stringify( changes ));
 
-            // change the backlog list
+            // change the backlog list so UI has updated values for each entry
 	    $.each( backlog, function(i, detail) {
                 if (detail.freq_key == changes.freq_key) {
+                    if (changes.type)  { detail.detail = changes.type }
                     if (changes.pass)  { detail.pass = Number(changes.pass) }
                     if (changes.label) { detail.label = changes.label }
                     if (changes.bank)  { detail.bank = changes.bank }
@@ -421,7 +453,7 @@ frequency_config = function(entry) {
         //config.popup('close');
     }).appendTo(config);
 
-    $('#pass-choice-'+choices[entry.pass]).attr('checked', true);
+    $('#pass-choice-'+pass_choices[entry.pass]).attr('checked', true);
     $('#banks').val(entry.bank);
 
     config.popup("open").trigger("create");

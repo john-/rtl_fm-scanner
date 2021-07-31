@@ -220,6 +220,10 @@ sub set_freq {
         $self->{pg}->db->query( 'UPDATE freqs SET bank=? WHERE freq_key = ?',
                                   $fields->{bank}, $fields->{freq_key} );
     }
+    if (exists($fields->{class})) {
+        $self->{app}->log->info(
+	    sprintf( 'change type for %s to %s', $fields->{xmit_key}, $fields->{class} ) );
+    }
 
 }
 
