@@ -223,6 +223,8 @@ sub set_freq {
     if (exists($fields->{class})) {
         $self->{app}->log->info(
 	    sprintf( 'change type for %s to %s', $fields->{xmit_key}, $fields->{class} ) );
+        $self->{pg}->db->query( 'UPDATE xmit_history SET class=? WHERE xmit_key = ?',
+                                  $fields->{class}, $fields->{xmit_key} );
     }
 
 }
