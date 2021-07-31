@@ -331,7 +331,7 @@ frequency_config = function(entry) {
     var pass_btns = $('<fieldset/>', {
             'data-role': 'controlgroup',
             'data-type': 'horizontal'
-        });
+        }).css({'float': 'left'});
 
     $('<legend/>', { text: 'Pass' }).appendTo(pass_btns);
 
@@ -350,12 +350,10 @@ frequency_config = function(entry) {
         }).appendTo(pass_btns);
     });
 
-    pass_btns.appendTo(config);
-
     var class_btns = $('<fieldset/>', {
             'data-role': 'controlgroup',
             'data-type': 'horizontal'
-        });
+        }).css({'float': 'right'});
 
     $('<legend/>', { text: 'Class' }).appendTo(class_btns);
 
@@ -380,7 +378,7 @@ frequency_config = function(entry) {
         }).appendTo(class_btns);
    }
 
-   class_btns.appendTo(config);
+   $('<div/>').append(pass_btns).append(class_btns).appendTo(config);
 
    //Create a submit button(fake)
     $("<a>", {
