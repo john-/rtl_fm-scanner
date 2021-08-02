@@ -273,7 +273,7 @@ render_page = function(data) {
             $('#frequencies').listview().listview('refresh');
 
             $( '#frequencies li a' ).on( "taphold", function( event ) {
-//            $( '#frequencies' ).on('click', 'li', function() {
+            //$( '#frequencies li a' ).on( "tap", function( event ) {
                 var id = $( this ).attr('id');
 
                 var entry = $.grep(data, function(obj) {
@@ -421,11 +421,11 @@ frequency_config = function(entry) {
                     if (changes.pass)  { detail.pass = Number(changes.pass) }
                     if (changes.label) { detail.label = changes.label }
                     if (changes.bank)  { detail.bank = changes.bank }
-                    console.log('checking backlog: ' , detail);
+                    console.log('checked backlog: ' , detail);
                 }
                 if (detail.xmit_key == changes.xmit_key) {
                     if (changes.class)  { detail.class = changes.class }
-                    console.log('checking backlog: ' , detail);
+                    console.log('checked backlog: ' , detail);
                 }
             });
         }
@@ -459,7 +459,6 @@ frequency_config = function(entry) {
     $('#banks').val(entry.bank);
 
     config.popup("open").trigger("create");
-//    alert(entry);
 
     $('#pass-choice-auto').checkboxradio('disable');
 };
